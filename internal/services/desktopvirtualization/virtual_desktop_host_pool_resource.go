@@ -163,7 +163,7 @@ func resourceVirtualDesktopHostPool() *pluginsdk.Resource {
 					},
 				},
 			},
-			//Added new
+			// Added new to enable current token value to be stored in state using CustomizeDiff
 			"registration_token": {
 				Type:      pluginsdk.TypeString,
 				Sensitive: true,
