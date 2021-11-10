@@ -125,6 +125,16 @@ resource "azurerm_virtual_desktop_host_pool" "test" {
   type                 = "Pooled"
   validate_environment = true
   load_balancer_type   = "BreadthFirst"
+
+  # Do not use timestamp() outside of testing due to https://github.com/hashicorp/terraform/issues/22461
+  registration_info {
+    expiration_date = timeadd(timestamp(), "48h")
+  }
+  lifecycle {
+    ignore_changes = [
+      registration_info[0].expiration_date,
+    ]
+  }
 }
 `, data.RandomInteger, data.Locations.Secondary, data.RandomString)
 }
