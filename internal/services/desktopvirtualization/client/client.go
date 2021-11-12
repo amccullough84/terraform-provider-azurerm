@@ -13,7 +13,7 @@ type Client struct {
 	OperationsClient        *desktopvirtualization.OperationsClient
 	SessionHostsClient      *desktopvirtualization.SessionHostsClient
 	WorkspacesClient        *desktopvirtualization.WorkspacesClient
-	ScalingPLansClient      *desktopvirtualization.ScalingPlansClient
+	ScalingPlansClient      *desktopvirtualization.ScalingPlansClient
 }
 
 // NewClient - New client for desktop virtualization
@@ -50,6 +50,6 @@ func NewClient(o *common.ClientOptions) *Client {
 		OperationsClient:        &OperationsClient,
 		SessionHostsClient:      &SessionHostsClient,
 		WorkspacesClient:        &WorkspacesClient,
-		ScalingPLansClient:      &ScalingPlansClient,
+		ScalingPlansClient:      &ScalingPlansClient,
 	}
 }
