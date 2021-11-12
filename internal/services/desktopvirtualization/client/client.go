@@ -13,6 +13,7 @@ type Client struct {
 	OperationsClient        *desktopvirtualization.OperationsClient
 	SessionHostsClient      *desktopvirtualization.SessionHostsClient
 	WorkspacesClient        *desktopvirtualization.WorkspacesClient
+	ScalingPLansClient      *desktopvirtualization.ScalingPlansClient
 }
 
 // NewClient - New client for desktop virtualization
@@ -38,6 +39,9 @@ func NewClient(o *common.ClientOptions) *Client {
 	WorkspacesClient := desktopvirtualization.NewWorkspacesClientWithBaseURI(o.ResourceManagerEndpoint, o.SubscriptionId)
 	o.ConfigureClient(&WorkspacesClient.Client, o.ResourceManagerAuthorizer)
 
+	ScalingPlansClient := desktopvirtualization.NewScalingPlansClientWithBaseURI(o.ResourceManagerEndpoint, o.SubscriptionId)
+	o.ConfigureClient(&ScalingPlansClient.Client, o.ResourceManagerAuthorizer)
+
 	return &Client{
 		ApplicationGroupsClient: &ApplicationGroupsClient,
 		ApplicationsClient:      &ApplicationsClient,
@@ -46,5 +50,6 @@ func NewClient(o *common.ClientOptions) *Client {
 		OperationsClient:        &OperationsClient,
 		SessionHostsClient:      &SessionHostsClient,
 		WorkspacesClient:        &WorkspacesClient,
+		ScalingPLansClient:      &ScalingPlansClient,
 	}
 }
