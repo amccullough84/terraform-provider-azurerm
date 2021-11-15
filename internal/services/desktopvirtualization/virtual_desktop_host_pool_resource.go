@@ -268,9 +268,6 @@ func resourceVirtualDesktopHostPoolRead(d *pluginsdk.ResourceData, meta interfac
 		if err := d.Set("registration_info", flattenVirtualDesktopHostPoolRegistrationInfo(props.RegistrationInfo)); err != nil {
 			return fmt.Errorf("setting `registration_info`: %+v", err)
 		}
-		if regInfo := props.RegistrationInfo; regInfo != nil {
-			d.Set("registration_token", regInfo.Token)
-		}
 	}
 
 	return tags.FlattenAndSet(d, resp.Tags)
