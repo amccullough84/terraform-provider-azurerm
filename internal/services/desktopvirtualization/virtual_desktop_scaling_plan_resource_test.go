@@ -233,7 +233,9 @@ resource "azurerm_resource_group" "test" {
 		  hostpool_id = azurerm_virtual_desktop_host_pool.test.id
 		  scaling_plan_enabled = true
 	  }
-  
+    tags = {
+		Acceptance = "Test"
+	}
   }
 
 `, data.RandomInteger, data.Locations.Secondary, data.RandomString, data.RandomString)

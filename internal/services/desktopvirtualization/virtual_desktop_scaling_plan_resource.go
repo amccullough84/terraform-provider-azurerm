@@ -79,7 +79,7 @@ func resourceVirtualDesktopScalingPlan() *pluginsdk.Resource {
 				ValidateFunc: computeValidate.VirtualMachineTimeZone(),
 			},
 
-			"schedules": {
+			"schedule": {
 				Type:     pluginsdk.TypeSet,
 				Optional: true,
 				Elem: &pluginsdk.Resource{
@@ -115,12 +115,12 @@ func resourceVirtualDesktopScalingPlan() *pluginsdk.Resource {
 							MaxItems: 1,
 							Elem: &pluginsdk.Resource{
 								Schema: map[string]*pluginsdk.Schema{
-									"Hour": {
+									"hour": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 23),
 									},
-									"Minute": {
+									"minute": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 59),
@@ -156,12 +156,12 @@ func resourceVirtualDesktopScalingPlan() *pluginsdk.Resource {
 							MaxItems: 1,
 							Elem: &pluginsdk.Resource{
 								Schema: map[string]*pluginsdk.Schema{
-									"Hour": {
+									"hour": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 23),
 									},
-									"Minute": {
+									"minute": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 59),
@@ -185,12 +185,12 @@ func resourceVirtualDesktopScalingPlan() *pluginsdk.Resource {
 							MaxItems: 1,
 							Elem: &pluginsdk.Resource{
 								Schema: map[string]*pluginsdk.Schema{
-									"Hour": {
+									"hour": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 23),
 									},
-									"Minute": {
+									"minute": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 59),
@@ -255,12 +255,12 @@ func resourceVirtualDesktopScalingPlan() *pluginsdk.Resource {
 							MaxItems: 1,
 							Elem: &pluginsdk.Resource{
 								Schema: map[string]*pluginsdk.Schema{
-									"Hour": {
+									"hour": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 23),
 									},
-									"Minute": {
+									"minute": {
 										Type:         pluginsdk.TypeInt,
 										Required:     true,
 										ValidateFunc: validation.IntBetween(0, 59),
@@ -445,7 +445,7 @@ func resourceVirtualDesktopScalingPlanRead(d *pluginsdk.ResourceData, meta inter
 		d.Set("friendly_name", props.FriendlyName)
 		d.Set("exclusion_tag_name", string(*props.ExclusionTag))
 		d.Set("time_zone", string(*props.TimeZone))
-		if err := d.Set("schedules", flattenVirtualDesktopScalingPlanSchedule(props.Schedules)); err != nil {
+		if err := d.Set("schedule", flattenVirtualDesktopScalingPlanSchedule(props.Schedules)); err != nil {
 			return fmt.Errorf("setting `schedules`: %+v", err)
 		}
 
@@ -475,7 +475,7 @@ func resourceVirtualDesktopScalingPlanDelete(d *pluginsdk.ResourceData, meta int
 }
 
 func expandScalingPlanSchedule(d *pluginsdk.ResourceData) *[]desktopvirtualization.ScalingSchedule {
-	configs := d.Get("schedules").([]interface{})
+	configs := d.Get("schedule").([]interface{})
 	schedules := make([]desktopvirtualization.ScalingSchedule, 0, len(configs))
 
 	for _, configRaw := range configs {
