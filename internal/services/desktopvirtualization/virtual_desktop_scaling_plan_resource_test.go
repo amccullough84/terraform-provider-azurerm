@@ -126,7 +126,49 @@ resource "azurerm_virtual_desktop_host_pool" "test" {
   validate_environment = true
   load_balancer_type   = "BreadthFirst"
 }
-`, data.RandomInteger, data.Locations.Secondary, data.RandomString)
+
+resource "azurerm_virtual_desktop_scaling_plan" "test" {
+	name				= "scalingPlan%x"
+	location            = "westeurope"
+	resource_group_name = azurerm_resource_group.test.name
+	friendly_name		= "Scaling Plan Test"
+	description			= "Test Scaling Plan"
+	schedule 			= {
+		name	= "Weekdays"
+		days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday"]
+		ramp_up_start_time = {
+			hour = 6
+			minute = 0
+		}
+		ramp_up_load_balancing = "BreadthFirst"
+		ramp_up_minimum_hosts_percent = 20
+		ramp_up_capacity_threshold = 10
+		peak_start_time = {
+			hour = 9
+			minute = 0
+		}
+		peak_load_balancing = "BreadthFirst"
+		ramp_down_start_time = {
+			hour = 18
+			minute = 0
+		}
+		ramp_down_load_balancing = "DepthFirst"
+		ramp_down_minimum_hosts_percent = 10
+		ramp_down_capacity_threshold_percent = 5
+		ramp_down_stop_hosts_when = "ZeroSessions"
+		off_peak_start_time = {
+			hour = 22
+			minute = 0
+		}
+		off_peak_load_balancing = "DepthFirst"
+	}
+	hostpool_association = {
+		hostpool_id = azurerm_virtual_desktop_host_pool.test.id
+		scaling_plan_enabled = true
+	}
+
+}
+`, data.RandomInteger, data.Locations.Secondary, data.RandomString, data.RandomString)
 }
 
 func (VirtualDesktopScalingPlanResource) complete(data acceptance.TestData) string {
@@ -136,53 +178,77 @@ provider "azurerm" {
 }
 
 resource "azurerm_resource_group" "test" {
-  name     = "acctestRG-vdesktop-%d"
-  location = "%s"
-}
-
-resource "azurerm_virtual_desktop_host_pool" "test" {
-  name                     = "acctestHP%s"
-  location                 = azurerm_resource_group.test.location
-  resource_group_name      = azurerm_resource_group.test.name
-  type                     = "Pooled"
-  friendly_name            = "A Friendly Name!"
-  description              = "A Description!"
-  validate_environment     = true
-  start_vm_on_connect      = true
-  load_balancer_type       = "BreadthFirst"
-  maximum_sessions_allowed = 100
-  preferred_app_group_type = "Desktop"
-  custom_rdp_properties    = "audiocapturemode:i:1;audiomode:i:0;"
-
-  # Do not use timestamp() outside of testing due to https://github.com/hashicorp/terraform/issues/22461
-  registration_info {
-    expiration_date = timeadd(timestamp(), "48h")
+	name     = "acctestRG-vdesktop-%d"
+	location = "%s"
   }
-  lifecycle {
-    ignore_changes = [
-      registration_info[0].expiration_date,
-    ]
+  
+  resource "azurerm_virtual_desktop_host_pool" "test" {
+	name                 = "acctestHP%s"
+	location             = azurerm_resource_group.test.location
+	resource_group_name  = azurerm_resource_group.test.name
+	type                 = "Pooled"
+	validate_environment = true
+	load_balancer_type   = "BreadthFirst"
+  }
+  
+  resource "azurerm_virtual_desktop_scaling_plan" "test" {
+	  name				= "scalingPlan%x"
+	  location            = "westeurope"
+	  resource_group_name = azurerm_resource_group.test.name
+	  friendly_name		= "Scaling Plan Test"
+	  description			= "Test Scaling Plan"
+	  schedule 			= {
+		  name	= "Weekdays"
+		  days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday"]
+		  ramp_up_start_time = {
+			  hour = 6
+			  minute = 0
+		  }
+		  ramp_up_load_balancing = "BreadthFirst"
+		  ramp_up_minimum_hosts_percent = 20
+		  ramp_up_capacity_threshold = 10
+		  peak_start_time = {
+			  hour = 9
+			  minute = 0
+		  }
+		  peak_load_balancing = "BreadthFirst"
+		  ramp_down_start_time = {
+			  hour = 18
+			  minute = 0
+		  }
+		  ramp_down_load_balancing = "DepthFirst"
+		  ramp_down_minimum_hosts_percent = 10
+		  ramp_down_capacity_threshold_percent = 5
+		  ramp_down_force_logoff_users = true
+		  ramp_down_wait_time = 45
+		  ramp_down_notification = "Please save your work and logoff in the next 45 minutes..."
+		  ramp_down_stop_hosts_when = "ZeroSessions"
+		  off_peak_start_time = {
+			  hour = 22
+			  minute = 0
+		  }
+		  off_peak_load_balancing = "DepthFirst"
+	  }
+	  hostpool_association = {
+		  hostpool_id = azurerm_virtual_desktop_host_pool.test.id
+		  scaling_plan_enabled = true
+	  }
+  
   }
 
-  tags = {
-    Purpose = "Acceptance-Testing"
-  }
-}
-
-`, data.RandomInteger, data.Locations.Secondary, data.RandomString)
+`, data.RandomInteger, data.Locations.Secondary, data.RandomString, data.RandomString)
 }
 
 func (r VirtualDesktopScalingPlanResource) requiresImport(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %s
 
-resource "azurerm_virtual_desktop_host_pool" "import" {
-  name                 = azurerm_virtual_desktop_host_pool.test.name
-  location             = azurerm_virtual_desktop_host_pool.test.location
-  resource_group_name  = azurerm_virtual_desktop_host_pool.test.resource_group_name
-  validate_environment = azurerm_virtual_desktop_host_pool.test.validate_environment
-  type                 = azurerm_virtual_desktop_host_pool.test.type
-  load_balancer_type   = azurerm_virtual_desktop_host_pool.test.load_balancer_type
+resource "azurerm_virtual_desktop_scaling_plan" "import" {
+	name				= azurerm_virtual_desktop_scaling_plan.test.name
+	location            = azurerm_virtual_desktop_scaling_plan.test.location
+	resource_group_name = azurerm_virtual_desktop_scaling_plan.test.resource_group_name
+	friendly_name		= azurerm_virtual_desktop_scaling_plan.test.friendly_name
+	description			= azurerm_virtual_desktop_scaling_plan.test.description
 }
 `, r.basic(data))
 }
