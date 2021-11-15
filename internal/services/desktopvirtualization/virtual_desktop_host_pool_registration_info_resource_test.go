@@ -65,6 +65,9 @@ func (VirtualDesktopHostPoolRegistrationInfoResource) Exists(ctx context.Context
 	}
 
 	resp, err := clients.DesktopVirtualization.HostPoolsClient.Get(ctx, id.ResourceGroup, id.HostPoolName)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %+v", *id, err)
+	}
 	exists := resp.ID != nil && resp.HostPoolProperties != nil && resp.HostPoolProperties.RegistrationInfo != nil && len(*resp.HostPoolProperties.RegistrationInfo.Token) > 0
 
 	return utils.Bool(exists), nil
