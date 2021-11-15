@@ -59,16 +59,6 @@ func TestAccVirtualDesktopHostPoolRegInfo_update(t *testing.T) {
 
 func (VirtualDesktopHostPoolRegistrationInfoResource) Exists(ctx context.Context, clients *clients.Client, state *pluginsdk.InstanceState) (*bool, error) {
 
-	//resp, err := clients.Network.VnetClient.Get(ctx, id.ResourceGroup, id.VirtualNetworkName, "")
-	//if err != nil {
-	//	return nil, fmt.Errorf("reading %s: %+v", *id, err)
-	//}
-
-	//exists := resp.ID != nil && resp.VirtualNetworkPropertiesFormat != nil && resp.VirtualNetworkPropertiesFormat.DhcpOptions != nil &&
-	//	resp.VirtualNetworkPropertiesFormat.DhcpOptions.DNSServers != nil && len(*resp.VirtualNetworkPropertiesFormat.DhcpOptions.DNSServers) > 0
-
-	//return utils.Bool(exists), nil
-
 	id, err := parse.HostPoolRegistrationInfoID(state.ID)
 	if err != nil {
 		return nil, err
