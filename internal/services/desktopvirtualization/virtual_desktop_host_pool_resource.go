@@ -1,7 +1,6 @@
 package desktopvirtualization
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -43,8 +42,6 @@ func resourceVirtualDesktopHostPool() *pluginsdk.Resource {
 		StateUpgraders: pluginsdk.StateUpgrades(map[int]pluginsdk.StateUpgrade{
 			0: migration.HostPoolV0ToV1{},
 		}),
-
-		CustomizeDiff: pluginsdk.CustomizeDiffShim(hostpoolRegistrationCustomDiff),
 
 		Schema: map[string]*pluginsdk.Schema{
 			"name": {
@@ -163,26 +160,10 @@ func resourceVirtualDesktopHostPool() *pluginsdk.Resource {
 					},
 				},
 			},
-			// Added new to enable current token value to be stored in state using CustomizeDiff
-			"registration_token": {
-				Type:      pluginsdk.TypeString,
-				Sensitive: true,
-				Computed:  true,
-			},
 
 			"tags": tags.Schema(),
 		},
 	}
-}
-
-func hostpoolRegistrationCustomDiff(ctx context.Context, d *pluginsdk.ResourceDiff, _ interface{}) error {
-	if d.HasChange("registration_info") {
-		if err := d.SetNewComputed("registration_token"); err != nil {
-			return err
-		}
-		return nil
-	}
-	return nil
 }
 
 func resourceVirtualDesktopHostPoolCreateUpdate(d *pluginsdk.ResourceData, meta interface{}) error {
