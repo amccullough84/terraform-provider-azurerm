@@ -32,7 +32,7 @@ func TestAccVirtualDesktopHostPoolRegInfo_basic(t *testing.T) {
 
 func TestAccVirtualDesktopHostPoolRegInfo_update(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_virtual_desktop_host_pool", "test")
-	r := VirtualDesktopHostPoolResource{}
+	r := VirtualDesktopHostPoolRegistrationInfoResource{}
 
 	data.ResourceTest(t, r, []acceptance.TestStep{
 		{
