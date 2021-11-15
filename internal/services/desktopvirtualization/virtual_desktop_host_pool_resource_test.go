@@ -125,6 +125,12 @@ resource "azurerm_virtual_desktop_host_pool" "test" {
   type                 = "Pooled"
   validate_environment = true
   load_balancer_type   = "BreadthFirst"
+
+  lifecycle {
+    ignore_changes = [
+      registration_info[0].expiration_date,
+    ]
+  }
 }
 `, data.RandomInteger, data.Locations.Secondary, data.RandomString)
 }
