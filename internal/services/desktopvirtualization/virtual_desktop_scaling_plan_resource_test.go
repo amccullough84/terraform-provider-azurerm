@@ -133,22 +133,22 @@ resource "azurerm_virtual_desktop_scaling_plan" "test" {
 	resource_group_name = azurerm_resource_group.test.name
 	friendly_name		= "Scaling Plan Test"
 	description			= "Test Scaling Plan"
-	schedule 			= {
+	schedule {
 		name	= "Weekdays"
 		days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday"]
-		ramp_up_start_time = {
+		ramp_up_start_time {
 			hour = 6
 			minute = 0
 		}
 		ramp_up_load_balancing = "BreadthFirst"
 		ramp_up_minimum_hosts_percent = 20
-		ramp_up_capacity_threshold = 10
-		peak_start_time = {
+		ramp_up_capacity_threshold_percent = 10
+		peak_start_time {
 			hour = 9
 			minute = 0
 		}
 		peak_load_balancing = "BreadthFirst"
-		ramp_down_start_time = {
+		ramp_down_start_time {
 			hour = 18
 			minute = 0
 		}
@@ -156,13 +156,13 @@ resource "azurerm_virtual_desktop_scaling_plan" "test" {
 		ramp_down_minimum_hosts_percent = 10
 		ramp_down_capacity_threshold_percent = 5
 		ramp_down_stop_hosts_when = "ZeroSessions"
-		off_peak_start_time = {
+		off_peak_start_time {
 			hour = 22
 			minute = 0
 		}
 		off_peak_load_balancing = "DepthFirst"
 	}
-	hostpool_association = {
+	hostpool_association {
 		hostpool_id = azurerm_virtual_desktop_host_pool.test.id
 		scaling_plan_enabled = true
 	}
@@ -197,22 +197,23 @@ resource "azurerm_resource_group" "test" {
 	  resource_group_name = azurerm_resource_group.test.name
 	  friendly_name		= "Scaling Plan Test"
 	  description			= "Test Scaling Plan"
-	  schedule 			= {
+
+	  schedule {
 		  name	= "Weekdays"
 		  days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday"]
-		  ramp_up_start_time = {
+		  ramp_up_start_time {
 			  hour = 6
 			  minute = 0
 		  }
 		  ramp_up_load_balancing = "BreadthFirst"
 		  ramp_up_minimum_hosts_percent = 20
-		  ramp_up_capacity_threshold = 10
-		  peak_start_time = {
+		  ramp_up_capacity_threshold_percent = 10
+		  peak_start_time {
 			  hour = 9
 			  minute = 0
 		  }
 		  peak_load_balancing = "BreadthFirst"
-		  ramp_down_start_time = {
+		  ramp_down_start_time {
 			  hour = 18
 			  minute = 0
 		  }
@@ -221,15 +222,15 @@ resource "azurerm_resource_group" "test" {
 		  ramp_down_capacity_threshold_percent = 5
 		  ramp_down_force_logoff_users = true
 		  ramp_down_wait_time = 45
-		  ramp_down_notification = "Please save your work and logoff in the next 45 minutes..."
+		  ramp_down_notification_message = "Please save your work and logoff in the next 45 minutes..."
 		  ramp_down_stop_hosts_when = "ZeroSessions"
-		  off_peak_start_time = {
+		  off_peak_start_time {
 			  hour = 22
 			  minute = 0
 		  }
 		  off_peak_load_balancing = "DepthFirst"
 	  }
-	  hostpool_association = {
+	  hostpool_association {
 		  hostpool_id = azurerm_virtual_desktop_host_pool.test.id
 		  scaling_plan_enabled = true
 	  }

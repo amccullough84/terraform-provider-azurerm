@@ -245,7 +245,6 @@ func resourceVirtualDesktopScalingPlan() *pluginsdk.Resource {
 						"ramp_down_notifcation_message": {
 							Type:         pluginsdk.TypeString,
 							Optional:     true,
-							RequiredWith: []string{"ramp_down_force_logoff_users"},
 							ValidateFunc: validation.StringLenBetween(1, 512),
 						},
 
