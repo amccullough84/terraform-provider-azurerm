@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/preview/desktopvirtualization/mgmt/2020-11-02-preview/desktopvirtualization"
+	"github.com/Azure/azure-sdk-for-go/services/preview/desktopvirtualization/mgmt/2021-09-03-preview/desktopvirtualization"
 	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/desktopvirtualization/parse"
@@ -101,7 +101,7 @@ func resourceVirtualDesktopHostPoolRegistrationInfoCreateUpdate(d *pluginsdk.Res
 	hostpool.HostPoolProperties.RegistrationInfo.ExpirationTime = &date.Time{
 		Time: expdt,
 	}
-	hostpool.HostPoolProperties.RegistrationInfo.RegistrationTokenOperation = desktopvirtualization.Update
+	hostpool.HostPoolProperties.RegistrationInfo.RegistrationTokenOperation = desktopvirtualization.RegistrationTokenOperationUpdate
 
 	if _, err := client.CreateOrUpdate(ctx, id.ResourceGroup, id.HostPoolName, hostpool); err != nil {
 		return fmt.Errorf("Creating Virtual Desktop Host Pool Registration Info %q (Resource Group %q): %+v", id.HostPoolName, id.ResourceGroup, err)
@@ -175,7 +175,7 @@ func resourceVirtualDesktopHostPoolRegistrationInfoDelete(d *pluginsdk.ResourceD
 	}
 
 	if regInfo := resp.HostPoolProperties.RegistrationInfo; regInfo != nil {
-		regInfo.RegistrationTokenOperation = desktopvirtualization.Delete
+		regInfo.RegistrationTokenOperation = desktopvirtualization.RegistrationTokenOperationDelete
 	}
 
 	if _, err = client.CreateOrUpdate(ctx, id.ResourceGroup, id.HostPoolName, resp); err != nil {
