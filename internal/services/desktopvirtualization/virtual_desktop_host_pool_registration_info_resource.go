@@ -9,6 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/preview/desktopvirtualization/mgmt/2020-11-02-preview/desktopvirtualization"
 	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/locks"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/desktopvirtualization/parse"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/validation"
@@ -82,6 +83,9 @@ func resourceVirtualDesktopHostPoolRegistrationInfoCreateUpdate(d *pluginsdk.Res
 		return err
 	}
 
+	locks.ByName(hostpoolId.Name, hostpoolResourceType)
+	defer locks.UnlockByName(hostpoolId.Name, hostpoolResourceType)
+
 	// This is a virtual resource so the last segment is hardcoded
 	id := parse.NewHostPoolRegistrationInfoID(hostpoolId.SubscriptionId, hostpoolId.ResourceGroup, hostpoolId.Name, "default")
 
@@ -154,6 +158,9 @@ func resourceVirtualDesktopHostPoolRegistrationInfoDelete(d *pluginsdk.ResourceD
 	}
 
 	hostpoolId := parse.NewHostPoolID(id.SubscriptionId, id.ResourceGroup, id.HostPoolName)
+
+	locks.ByName(hostpoolId.Name, hostpoolResourceType)
+	defer locks.UnlockByName(hostpoolId.Name, hostpoolResourceType)
 
 	resp, err := client.Get(ctx, id.ResourceGroup, id.HostPoolName)
 	if err != nil {
