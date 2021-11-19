@@ -18,12 +18,15 @@ IMPROVEMENTS:
 * videoanalyzer: updating the embedded SDK to use the new Resource ID Parsers [GH-14135]
 * `azurerm_orchestrated_virtual_machine_scale_set` - added support for VMSS Flex public preview [GH-14003]
 * `azurerm_machine_learning_workspace` - support for the `encryption` block [GH-14120]
+* `azurerm_windows_web_app` - (Beta) add support for `health_check_eviction_time_in_mins` and `vnet_route_all_enabled` [GH-14202]
+* `azurerm_linux_web_app` - (Beta) add support for `health_check_eviction_time_in_mins` and `vnet_route_all_enabled` [GH-14202]
 
 BUG FIXES: 
 
 * `azurerm_linux_virtual_machine_scale_set` - `source_image_reference.offer` and `source_image_reference.publisher` are now ForceNew [GH-14165]
 * `azurerm_windows_virtual_machine_scale_set` - `source_image_reference.offer` and `source_image_reference.publisher` are now ForceNew [GH-14165]
 * `azurerm_network_watcher_flow_log` - now locks on the network security group to prevent `AnotherOperationInProgress` errors [GH-14160]
+* `azurerm_frontdoor` - validation for `probe_method` allows the default value [GH-14204]
 
 ## 2.85.0 (November 12, 2021)
 
