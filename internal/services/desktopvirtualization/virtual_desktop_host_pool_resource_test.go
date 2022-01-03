@@ -166,7 +166,7 @@ resource "azurerm_virtual_desktop_host_pool" "test" {
   }
   lifecycle {
     ignore_changes = [
-      registration_info[0].expiration_date,
+      registration_info,
     ]
   }
 
@@ -174,7 +174,6 @@ resource "azurerm_virtual_desktop_host_pool" "test" {
     Purpose = "Acceptance-Testing"
   }
 }
-
 `, data.RandomInteger, data.Locations.Secondary, data.RandomString)
 }
 

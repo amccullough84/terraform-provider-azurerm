@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/preview/desktopvirtualization/mgmt/2020-11-02-preview/desktopvirtualization"
+	"github.com/Azure/azure-sdk-for-go/services/preview/desktopvirtualization/mgmt/2021-09-03-preview/desktopvirtualization"
 	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/azure"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/tf"
@@ -62,8 +62,8 @@ func resourceVirtualDesktopHostPool() *pluginsdk.Resource {
 				Required: true,
 				ForceNew: true,
 				ValidateFunc: validation.StringInSlice([]string{
-					string(desktopvirtualization.Personal),
-					string(desktopvirtualization.Pooled),
+					string(desktopvirtualization.HostPoolTypePersonal),
+					string(desktopvirtualization.HostPoolTypePooled),
 				}, false),
 			},
 
@@ -72,9 +72,9 @@ func resourceVirtualDesktopHostPool() *pluginsdk.Resource {
 				Required: true,
 				ForceNew: true,
 				ValidateFunc: validation.StringInSlice([]string{
-					string(desktopvirtualization.BreadthFirst),
-					string(desktopvirtualization.DepthFirst),
-					string(desktopvirtualization.Persistent),
+					string(desktopvirtualization.LoadBalancerTypeBreadthFirst),
+					string(desktopvirtualization.LoadBalancerTypeDepthFirst),
+					string(desktopvirtualization.LoadBalancerTypePersistent),
 				}, false),
 			},
 
@@ -106,8 +106,8 @@ func resourceVirtualDesktopHostPool() *pluginsdk.Resource {
 				Optional: true,
 				ForceNew: true,
 				ValidateFunc: validation.StringInSlice([]string{
-					string(desktopvirtualization.Automatic),
-					string(desktopvirtualization.Direct),
+					string(desktopvirtualization.PersonalDesktopAssignmentTypeAutomatic),
+					string(desktopvirtualization.PersonalDesktopAssignmentTypeDirect),
 				}, false),
 			},
 
@@ -303,7 +303,7 @@ func expandVirtualDesktopHostPoolRegistrationInfo(d *pluginsdk.ResourceData) *de
 
 	if len(oldInterfaces) != 0 && len(newInterfaces) == 0 {
 		deleteConfig := desktopvirtualization.RegistrationInfo{
-			RegistrationTokenOperation: desktopvirtualization.Delete,
+			RegistrationTokenOperation: desktopvirtualization.RegistrationTokenOperationDelete,
 		}
 		return &deleteConfig
 	}
@@ -314,7 +314,7 @@ func expandVirtualDesktopHostPoolRegistrationInfo(d *pluginsdk.ResourceData) *de
 		ExpirationTime: &date.Time{
 			Time: expdt,
 		},
-		RegistrationTokenOperation: desktopvirtualization.Update,
+		RegistrationTokenOperation: desktopvirtualization.RegistrationTokenOperationUpdate,
 	}
 
 	return &configuration

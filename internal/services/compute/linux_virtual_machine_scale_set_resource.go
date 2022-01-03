@@ -211,6 +211,12 @@ func resourceLinuxVirtualMachineScaleSet() *pluginsdk.Resource {
 
 			"secret": linuxSecretSchema(),
 
+			"secure_boot_enabled": {
+				Type:     pluginsdk.TypeBool,
+				Optional: true,
+				ForceNew: true,
+			},
+
 			"single_placement_group": {
 				Type:     pluginsdk.TypeBool,
 				Optional: true,
@@ -241,6 +247,18 @@ func resourceLinuxVirtualMachineScaleSet() *pluginsdk.Resource {
 					string(compute.UpgradeModeManual),
 					string(compute.UpgradeModeRolling),
 				}, false),
+			},
+
+			"user_data": {
+				Type:         pluginsdk.TypeString,
+				Optional:     true,
+				ValidateFunc: validation.StringIsBase64,
+			},
+
+			"vtpm_enabled": {
+				Type:     pluginsdk.TypeBool,
+				Optional: true,
+				ForceNew: true,
 			},
 
 			"zone_balance": {
@@ -458,6 +476,32 @@ func resourceLinuxVirtualMachineScaleSetCreate(d *pluginsdk.ResourceData, meta i
 		virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{
 			EncryptionAtHost: utils.Bool(encryptionAtHostEnabled.(bool)),
 		}
+	}
+
+	if secureBootEnabled, ok := d.GetOk("secure_boot_enabled"); ok && secureBootEnabled.(bool) {
+		if virtualMachineProfile.SecurityProfile == nil {
+			virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{}
+		}
+		if virtualMachineProfile.SecurityProfile.UefiSettings == nil {
+			virtualMachineProfile.SecurityProfile.UefiSettings = &compute.UefiSettings{}
+		}
+		virtualMachineProfile.SecurityProfile.SecurityType = compute.SecurityTypesTrustedLaunch
+		virtualMachineProfile.SecurityProfile.UefiSettings.SecureBootEnabled = utils.Bool(secureBootEnabled.(bool))
+	}
+
+	if vtpmEnabled, ok := d.GetOk("vtpm_enabled"); ok && vtpmEnabled.(bool) {
+		if virtualMachineProfile.SecurityProfile == nil {
+			virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{}
+		}
+		if virtualMachineProfile.SecurityProfile.UefiSettings == nil {
+			virtualMachineProfile.SecurityProfile.UefiSettings = &compute.UefiSettings{}
+		}
+		virtualMachineProfile.SecurityProfile.SecurityType = compute.SecurityTypesTrustedLaunch
+		virtualMachineProfile.SecurityProfile.UefiSettings.VTpmEnabled = utils.Bool(vtpmEnabled.(bool))
+	}
+
+	if v, ok := d.GetOk("user_data"); ok {
+		virtualMachineProfile.UserData = utils.String(v.(string))
 	}
 
 	// Azure API: "Authentication using either SSH or by user name and password must be enabled in Linux profile."
@@ -845,6 +889,11 @@ func resourceLinuxVirtualMachineScaleSetUpdate(d *pluginsdk.ResourceData, meta i
 		update.Tags = tags.Expand(d.Get("tags").(map[string]interface{}))
 	}
 
+	if d.HasChange("user_data") {
+		updateInstances = true
+		updateProps.VirtualMachineProfile.UserData = utils.String(d.Get("user_data").(string))
+	}
+
 	update.VirtualMachineScaleSetUpdateProperties = &updateProps
 
 	metaData := virtualMachineScaleSetUpdateMetaData{
@@ -1045,10 +1094,27 @@ func resourceLinuxVirtualMachineScaleSetRead(d *pluginsdk.ResourceData, meta int
 		d.Set("extensions_time_budget", extensionsTimeBudget)
 
 		encryptionAtHostEnabled := false
-		if profile.SecurityProfile != nil && profile.SecurityProfile.EncryptionAtHost != nil {
-			encryptionAtHostEnabled = *profile.SecurityProfile.EncryptionAtHost
+		vtpmEnabled := false
+		secureBootEnabled := false
+
+		if secprofile := profile.SecurityProfile; secprofile != nil {
+			if secprofile.EncryptionAtHost != nil {
+				encryptionAtHostEnabled = *secprofile.EncryptionAtHost
+			}
+			if uefi := profile.SecurityProfile.UefiSettings; uefi != nil {
+				if uefi.VTpmEnabled != nil {
+					vtpmEnabled = *uefi.VTpmEnabled
+				}
+				if uefi.SecureBootEnabled != nil {
+					secureBootEnabled = *uefi.SecureBootEnabled
+				}
+			}
 		}
+
 		d.Set("encryption_at_host_enabled", encryptionAtHostEnabled)
+		d.Set("vtpm_enabled", vtpmEnabled)
+		d.Set("secure_boot_enabled", secureBootEnabled)
+		d.Set("user_data", profile.UserData)
 	}
 
 	if policy := props.UpgradePolicy; policy != nil {

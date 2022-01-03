@@ -229,6 +229,12 @@ func resourceWindowsVirtualMachineScaleSet() *pluginsdk.Resource {
 
 			"secret": windowsSecretSchema(),
 
+			"secure_boot_enabled": {
+				Type:     pluginsdk.TypeBool,
+				Optional: true,
+				ForceNew: true,
+			},
+
 			"single_placement_group": {
 				Type:     pluginsdk.TypeBool,
 				Optional: true,
@@ -261,6 +267,18 @@ func resourceWindowsVirtualMachineScaleSet() *pluginsdk.Resource {
 					string(compute.UpgradeModeManual),
 					string(compute.UpgradeModeRolling),
 				}, false),
+			},
+
+			"user_data": {
+				Type:         pluginsdk.TypeString,
+				Optional:     true,
+				ValidateFunc: validation.StringIsBase64,
+			},
+
+			"vtpm_enabled": {
+				Type:     pluginsdk.TypeBool,
+				Optional: true,
+				ForceNew: true,
 			},
 
 			"winrm_listener": winRmListenerSchema(),
@@ -304,8 +322,7 @@ func resourceWindowsVirtualMachineScaleSetCreate(d *pluginsdk.ResourceData, meta
 	resourceGroup := d.Get("resource_group_name").(string)
 	name := d.Get("name").(string)
 
-	// Upgrading to the 2021-07-01 exposed a new expand parameter in the GET method
-	exists, err := client.Get(ctx, resourceGroup, name, compute.ExpandTypesForGetVMScaleSetsUserData)
+	exists, err := client.Get(ctx, resourceGroup, name, "")
 	if err != nil {
 		if !utils.ResponseWasNotFound(exists.Response) {
 			return fmt.Errorf("checking for existing Windows Virtual Machine Scale Set %q (Resource Group %q): %+v", name, resourceGroup, err)
@@ -476,9 +493,41 @@ func resourceWindowsVirtualMachineScaleSetCreate(d *pluginsdk.ResourceData, meta
 	}
 
 	if encryptionAtHostEnabled, ok := d.GetOk("encryption_at_host_enabled"); ok {
-		virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{
-			EncryptionAtHost: utils.Bool(encryptionAtHostEnabled.(bool)),
+		if virtualMachineProfile.SecurityProfile == nil {
+			virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{}
 		}
+		virtualMachineProfile.SecurityProfile.EncryptionAtHost = utils.Bool(encryptionAtHostEnabled.(bool))
+	}
+
+	if securebootEnabled, ok := d.GetOk("secure_boot_enabled"); ok {
+		if virtualMachineProfile.SecurityProfile == nil {
+			virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{}
+		}
+
+		if virtualMachineProfile.SecurityProfile.UefiSettings == nil {
+			virtualMachineProfile.SecurityProfile.UefiSettings = &compute.UefiSettings{}
+		}
+		secureboot := d.Get("secure_boot_enabled").(bool)
+		if secureboot {
+			virtualMachineProfile.SecurityProfile.SecurityType = compute.SecurityTypesTrustedLaunch
+		}
+
+		virtualMachineProfile.SecurityProfile.UefiSettings.SecureBootEnabled = utils.Bool(securebootEnabled.(bool))
+	}
+
+	if vtpmEnabled, ok := d.GetOk("vtpm_enabled"); ok {
+		if virtualMachineProfile.SecurityProfile == nil {
+			virtualMachineProfile.SecurityProfile = &compute.SecurityProfile{}
+		}
+		if virtualMachineProfile.SecurityProfile.UefiSettings == nil {
+			virtualMachineProfile.SecurityProfile.UefiSettings = &compute.UefiSettings{}
+		}
+		vtpm := d.Get("vtpm_enabled").(bool)
+		if vtpm {
+			virtualMachineProfile.SecurityProfile.SecurityType = compute.SecurityTypesTrustedLaunch
+		}
+
+		virtualMachineProfile.SecurityProfile.UefiSettings.VTpmEnabled = utils.Bool(vtpmEnabled.(bool))
 	}
 
 	if evictionPolicyRaw, ok := d.GetOk("eviction_policy"); ok {
@@ -504,6 +553,10 @@ func resourceWindowsVirtualMachineScaleSetCreate(d *pluginsdk.ResourceData, meta
 
 	if v, ok := d.GetOk("terminate_notification"); ok {
 		virtualMachineProfile.ScheduledEventsProfile = ExpandVirtualMachineScaleSetScheduledEventsProfile(v.([]interface{}))
+	}
+
+	if v, ok := d.GetOk("user_data"); ok {
+		virtualMachineProfile.UserData = utils.String(v.(string))
 	}
 
 	scaleInPolicy := d.Get("scale_in_policy").(string)
@@ -814,9 +867,10 @@ func resourceWindowsVirtualMachineScaleSetUpdate(d *pluginsdk.ResourceData, meta
 	}
 
 	if d.HasChange("encryption_at_host_enabled") {
-		updateProps.VirtualMachineProfile.SecurityProfile = &compute.SecurityProfile{
-			EncryptionAtHost: utils.Bool(d.Get("encryption_at_host_enabled").(bool)),
+		if updateProps.VirtualMachineProfile.SecurityProfile == nil {
+			updateProps.VirtualMachineProfile.SecurityProfile = &compute.SecurityProfile{}
 		}
+		updateProps.VirtualMachineProfile.SecurityProfile.EncryptionAtHost = utils.Bool(d.Get("encryption_at_host_enabled").(bool))
 	}
 
 	if d.HasChange("license_type") {
@@ -880,6 +934,11 @@ func resourceWindowsVirtualMachineScaleSetUpdate(d *pluginsdk.ResourceData, meta
 		updateProps.VirtualMachineProfile.ExtensionProfile.ExtensionsTimeBudget = utils.String(d.Get("extensions_time_budget").(string))
 	}
 
+	if d.HasChange("user_data") {
+		updateInstances = true
+		updateProps.VirtualMachineProfile.UserData = utils.String(d.Get("user_data").(string))
+	}
+
 	if d.HasChange("tags") {
 		update.Tags = tags.Expand(d.Get("tags").(map[string]interface{}))
 	}
@@ -913,7 +972,6 @@ func resourceWindowsVirtualMachineScaleSetRead(d *pluginsdk.ResourceData, meta i
 		return err
 	}
 
-	// Upgrading to the 2021-07-01 exposed a new expand parameter in the GET method
 	resp, err := client.Get(ctx, id.ResourceGroup, id.Name, compute.ExpandTypesForGetVMScaleSetsUserData)
 	if err != nil {
 		if utils.ResponseWasNotFound(resp.Response) {
@@ -1113,10 +1171,27 @@ func resourceWindowsVirtualMachineScaleSetRead(d *pluginsdk.ResourceData, meta i
 		d.Set("extensions_time_budget", extensionsTimeBudget)
 
 		encryptionAtHostEnabled := false
-		if profile.SecurityProfile != nil && profile.SecurityProfile.EncryptionAtHost != nil {
-			encryptionAtHostEnabled = *profile.SecurityProfile.EncryptionAtHost
+		vtpmEnabled := false
+		secureBootEnabled := false
+
+		if secprofile := profile.SecurityProfile; secprofile != nil {
+			if secprofile.EncryptionAtHost != nil {
+				encryptionAtHostEnabled = *secprofile.EncryptionAtHost
+			}
+			if uefi := profile.SecurityProfile.UefiSettings; uefi != nil {
+				if uefi.VTpmEnabled != nil {
+					vtpmEnabled = *uefi.VTpmEnabled
+				}
+				if uefi.SecureBootEnabled != nil {
+					secureBootEnabled = *uefi.SecureBootEnabled
+				}
+			}
 		}
+
 		d.Set("encryption_at_host_enabled", encryptionAtHostEnabled)
+		d.Set("vtpm_enabled", vtpmEnabled)
+		d.Set("secure_boot_enabled", secureBootEnabled)
+		d.Set("user_data", profile.UserData)
 	}
 
 	if err := d.Set("zones", resp.Zones); err != nil {
@@ -1136,8 +1211,7 @@ func resourceWindowsVirtualMachineScaleSetDelete(d *pluginsdk.ResourceData, meta
 		return err
 	}
 
-	// Upgrading to the 2021-07-01 exposed a new expand parameter in the GET method
-	resp, err := client.Get(ctx, id.ResourceGroup, id.Name, compute.ExpandTypesForGetVMScaleSetsUserData)
+	resp, err := client.Get(ctx, id.ResourceGroup, id.Name, "")
 	if err != nil {
 		if utils.ResponseWasNotFound(resp.Response) {
 			return nil
