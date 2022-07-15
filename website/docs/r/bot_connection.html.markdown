@@ -25,7 +25,7 @@ resource "azurerm_bot_channels_registration" "example" {
   location            = "global"
   resource_group_name = azurerm_resource_group.example.name
   sku                 = "F0"
-  microsoft_app_id    = "${data.azurerm_client_config.current.client_id}"
+  microsoft_app_id    = data.azurerm_client_config.current.client_id
 }
 
 resource "azurerm_bot_connection" "example" {
@@ -63,6 +63,7 @@ The following arguments are supported:
 
 * `tags` - (Optional) A mapping of tags to assign to the resource.
 
+-> **Note:** `tags` has been deprecated as the API no longer supports it and will be removed in version 4.0 of the provider.
 
 ## Attributes Reference
 

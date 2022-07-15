@@ -5,11 +5,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/azure"
 	azValidate "github.com/hashicorp/terraform-provider-azurerm/helpers/validate"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/compute/validate"
-	msiparse "github.com/hashicorp/terraform-provider-azurerm/internal/services/msi/parse"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/validation"
 	"github.com/hashicorp/terraform-provider-azurerm/utils"
@@ -63,10 +62,17 @@ func OrchestratedVirtualMachineScaleSetWindowsConfigurationSchema() *pluginsdk.S
 				// I am only commenting this out as this is going to be supported in the next release of the API in October 2021
 				// "additional_unattend_content": additionalUnattendContentSchema(),
 
+				// TODO 4.0: change this from enable_* to *_enabled
 				"enable_automatic_updates": {
 					Type:     pluginsdk.TypeBool,
 					Optional: true,
 					Default:  true,
+				},
+
+				"hotpatching_enabled": {
+					Type:     pluginsdk.TypeBool,
+					Optional: true,
+					Default:  false,
 				},
 
 				"provision_vm_agent": {
@@ -74,6 +80,17 @@ func OrchestratedVirtualMachineScaleSetWindowsConfigurationSchema() *pluginsdk.S
 					Optional: true,
 					Default:  true,
 					ForceNew: true,
+				},
+
+				"patch_mode": {
+					Type:     pluginsdk.TypeString,
+					Optional: true,
+					Default:  string(compute.WindowsVMGuestPatchModeAutomaticByOS),
+					ValidateFunc: validation.StringInSlice([]string{
+						string(compute.WindowsVMGuestPatchModeAutomaticByOS),
+						string(compute.WindowsVMGuestPatchModeAutomaticByPlatform),
+						string(compute.WindowsVMGuestPatchModeManual),
+					}, false),
 				},
 
 				"secret": windowsSecretSchema(),
@@ -129,107 +146,85 @@ func OrchestratedVirtualMachineScaleSetLinuxConfigurationSchema() *pluginsdk.Sch
 					ForceNew: true,
 				},
 
+				"patch_mode": {
+					Type:     pluginsdk.TypeString,
+					Optional: true,
+					Default:  string(compute.LinuxVMGuestPatchModeImageDefault),
+					ValidateFunc: validation.StringInSlice([]string{
+						string(compute.LinuxVMGuestPatchModeImageDefault),
+						string(compute.LinuxVMGuestPatchModeAutomaticByPlatform),
+					}, false),
+				},
+
 				"secret": linuxSecretSchema(),
 			},
 		},
 	}
 }
 
-// func OrchestratedVirtualMachineScaleSetExtensionsSchema() *pluginsdk.Schema {
-// 	return &pluginsdk.Schema{
-// 		Type:     pluginsdk.TypeSet,
-// 		Optional: true,
-// 		Computed: true,
-// 		Elem: &pluginsdk.Resource{
-// 			Schema: map[string]*pluginsdk.Schema{
-// 				"name": {
-// 					Type:         pluginsdk.TypeString,
-// 					Required:     true,
-// 					ValidateFunc: validation.StringIsNotEmpty,
-// 				},
-
-// 				"publisher": {
-// 					Type:         pluginsdk.TypeString,
-// 					Required:     true,
-// 					ValidateFunc: validation.StringIsNotEmpty,
-// 				},
-
-// 				"type": {
-// 					Type:         pluginsdk.TypeString,
-// 					Required:     true,
-// 					ValidateFunc: validation.StringIsNotEmpty,
-// 				},
-
-// 				"type_handler_version": {
-// 					Type:         pluginsdk.TypeString,
-// 					Required:     true,
-// 					ValidateFunc: validation.StringIsNotEmpty,
-// 				},
-
-// 				"auto_upgrade_minor_version": {
-// 					Type:     pluginsdk.TypeBool,
-// 					Optional: true,
-// 					Default:  true,
-// 				},
-
-// 				"force_update_tag": {
-// 					Type:     pluginsdk.TypeString,
-// 					Optional: true,
-// 				},
-
-// 				"protected_settings": {
-// 					Type:         pluginsdk.TypeString,
-// 					Optional:     true,
-// 					Sensitive:    true,
-// 					ValidateFunc: validation.StringIsJSON,
-// 				},
-
-// 				"provision_after_extensions": {
-// 					Type:     pluginsdk.TypeList,
-// 					Optional: true,
-// 					Elem: &pluginsdk.Schema{
-// 						Type: pluginsdk.TypeString,
-// 					},
-// 				},
-
-// 				"settings": {
-// 					Type:             pluginsdk.TypeString,
-// 					Optional:         true,
-// 					ValidateFunc:     validation.StringIsJSON,
-// 					DiffSuppressFunc: pluginsdk.SuppressJsonDiff,
-// 				},
-// 			},
-// 		},
-// 	}
-// }
-
-func OrchestratedVirtualMachineScaleSetIdentitySchema() *pluginsdk.Schema {
+func OrchestratedVirtualMachineScaleSetExtensionsSchema() *pluginsdk.Schema {
 	return &pluginsdk.Schema{
-		Type:     pluginsdk.TypeList,
+		Type:     pluginsdk.TypeSet,
 		Optional: true,
-		MaxItems: 1,
+		Computed: true,
 		Elem: &pluginsdk.Resource{
 			Schema: map[string]*pluginsdk.Schema{
-				"type": {
-					Type:     pluginsdk.TypeString,
-					Required: true,
-					ValidateFunc: validation.StringInSlice([]string{
-						string(compute.ResourceIdentityTypeUserAssigned),
-						string(compute.ResourceIdentityTypeNone),
-					}, false),
+				"name": {
+					Type:         pluginsdk.TypeString,
+					Required:     true,
+					ValidateFunc: validation.StringIsNotEmpty,
 				},
 
-				"identity_ids": {
-					Type:     pluginsdk.TypeSet,
+				"publisher": {
+					Type:         pluginsdk.TypeString,
+					Required:     true,
+					ValidateFunc: validation.StringIsNotEmpty,
+				},
+
+				"type": {
+					Type:         pluginsdk.TypeString,
+					Required:     true,
+					ValidateFunc: validation.StringIsNotEmpty,
+				},
+
+				"type_handler_version": {
+					Type:         pluginsdk.TypeString,
+					Required:     true,
+					ValidateFunc: validation.StringIsNotEmpty,
+				},
+
+				"auto_upgrade_minor_version_enabled": {
+					Type:     pluginsdk.TypeBool,
+					Optional: true,
+					Default:  true,
+				},
+
+				"force_extension_execution_on_change": {
+					Type:     pluginsdk.TypeString,
+					Optional: true,
+				},
+
+				"protected_settings": {
+					Type:         pluginsdk.TypeString,
+					Optional:     true,
+					Sensitive:    true,
+					ValidateFunc: validation.StringIsJSON,
+				},
+
+				"extensions_to_provision_after_vm_creation": {
+					Type:     pluginsdk.TypeList,
 					Optional: true,
 					Elem: &pluginsdk.Schema{
-						Type: pluginsdk.TypeString,
+						Type:         pluginsdk.TypeString,
+						ValidateFunc: validation.StringIsNotEmpty,
 					},
 				},
 
-				"principal_id": {
-					Type:     pluginsdk.TypeString,
-					Computed: true,
+				"settings": {
+					Type:             pluginsdk.TypeString,
+					Optional:         true,
+					ValidateFunc:     validation.StringIsJSON,
+					DiffSuppressFunc: pluginsdk.SuppressJsonDiff,
 				},
 			},
 		},
@@ -260,12 +255,14 @@ func OrchestratedVirtualMachineScaleSetNetworkInterfaceSchema() *pluginsdk.Schem
 					},
 				},
 
+				// TODO 4.0: change this from enable_* to *_enabled
 				"enable_accelerated_networking": {
 					Type:     pluginsdk.TypeBool,
 					Optional: true,
 					Default:  false,
 				},
 
+				// TODO 4.0: change this from enable_* to *_enabled
 				"enable_ip_forwarding": {
 					Type:     pluginsdk.TypeBool,
 					Optional: true,
@@ -282,47 +279,6 @@ func OrchestratedVirtualMachineScaleSetNetworkInterfaceSchema() *pluginsdk.Schem
 					Type:     pluginsdk.TypeBool,
 					Optional: true,
 					Default:  false,
-				},
-			},
-		},
-	}
-}
-
-func OrchestratedVirtualMachineScaleSetNetworkInterfaceSchemaForDataSource() *pluginsdk.Schema {
-	return &pluginsdk.Schema{
-		Type:     pluginsdk.TypeList,
-		Computed: true,
-		Elem: &pluginsdk.Resource{
-			Schema: map[string]*pluginsdk.Schema{
-				"name": {
-					Type:     pluginsdk.TypeString,
-					Computed: true,
-				},
-
-				"ip_configuration": orchestratedVirtualMachineScaleSetIPConfigurationSchemaForDataSource(),
-
-				"dns_servers": {
-					Type:     pluginsdk.TypeList,
-					Computed: true,
-					Elem: &pluginsdk.Schema{
-						Type: pluginsdk.TypeString,
-					},
-				},
-				"enable_accelerated_networking": {
-					Type:     pluginsdk.TypeBool,
-					Computed: true,
-				},
-				"enable_ip_forwarding": {
-					Type:     pluginsdk.TypeBool,
-					Computed: true,
-				},
-				"network_security_group_id": {
-					Type:     pluginsdk.TypeString,
-					Computed: true,
-				},
-				"primary": {
-					Type:     pluginsdk.TypeBool,
-					Computed: true,
 				},
 			},
 		},
@@ -367,14 +323,6 @@ func orchestratedVirtualMachineScaleSetIPConfigurationSchema() *pluginsdk.Schema
 					Set:      pluginsdk.HashString,
 				},
 
-				// Removed per service team this attribute will never be used in VMSS Flex
-				// "load_balancer_inbound_nat_rules_ids": {
-				// 	Type:     pluginsdk.TypeSet,
-				// 	Optional: true,
-				// 	Elem:     &pluginsdk.Schema{Type: pluginsdk.TypeString},
-				// 	Set:      pluginsdk.HashString,
-				// },
-
 				"primary": {
 					Type:     pluginsdk.TypeBool,
 					Optional: true,
@@ -397,71 +345,6 @@ func orchestratedVirtualMachineScaleSetIPConfigurationSchema() *pluginsdk.Schema
 						string(compute.IPVersionIPv4),
 						string(compute.IPVersionIPv6),
 					}, false),
-				},
-			},
-		},
-	}
-}
-
-func orchestratedVirtualMachineScaleSetIPConfigurationSchemaForDataSource() *pluginsdk.Schema {
-	return &pluginsdk.Schema{
-		Type:     pluginsdk.TypeList,
-		Computed: true,
-		Elem: &pluginsdk.Resource{
-			Schema: map[string]*pluginsdk.Schema{
-				"name": {
-					Type:     pluginsdk.TypeString,
-					Computed: true,
-				},
-
-				"application_gateway_backend_address_pool_ids": {
-					Type:     pluginsdk.TypeList,
-					Computed: true,
-					Elem: &pluginsdk.Schema{
-						Type: pluginsdk.TypeString,
-					},
-				},
-
-				"application_security_group_ids": {
-					Type:     pluginsdk.TypeList,
-					Computed: true,
-					Elem: &pluginsdk.Schema{
-						Type: pluginsdk.TypeString,
-					},
-				},
-
-				"load_balancer_backend_address_pool_ids": {
-					Type:     pluginsdk.TypeList,
-					Computed: true,
-					Elem: &pluginsdk.Schema{
-						Type: pluginsdk.TypeString,
-					},
-				},
-
-				// Removed per service team this attribute will never be used in VMSS Flex
-				// "load_balancer_inbound_nat_rules_ids": {
-				// 	Type:     pluginsdk.TypeList,
-				// 	Computed: true,
-				// 	Elem: &pluginsdk.Schema{
-				// 		Type: pluginsdk.TypeString,
-				// 	},
-				// },
-
-				"primary": {
-					Type:     pluginsdk.TypeBool,
-					Computed: true,
-				},
-
-				"public_ip_address": virtualMachineScaleSetPublicIPAddressSchemaForDataSource(),
-
-				"subnet_id": {
-					Type:     pluginsdk.TypeString,
-					Computed: true,
-				},
-
-				"version": {
-					Type:     pluginsdk.TypeString,
-					Computed: true,
 				},
 			},
 		},
@@ -553,7 +436,6 @@ func computerPrefixLinuxSchema() *pluginsdk.Schema {
 
 func OrchestratedVirtualMachineScaleSetDataDiskSchema() *pluginsdk.Schema {
 	return &pluginsdk.Schema{
-		// TODO: does this want to be a Set?
 		Type:     pluginsdk.TypeList,
 		Optional: true,
 		Elem: &pluginsdk.Resource{
@@ -616,16 +498,13 @@ func OrchestratedVirtualMachineScaleSetDataDiskSchema() *pluginsdk.Schema {
 					Optional: true,
 					Default:  false,
 				},
-
-				// TODO 3.0 - change this to ultra_ssd_disk_iops_read_write
-				"disk_iops_read_write": {
+				"ultra_ssd_disk_iops_read_write": {
 					Type:     pluginsdk.TypeInt,
 					Optional: true,
 					Computed: true,
 				},
 
-				// TODO 3.0 - change this to ultra_ssd_disk_iops_read_write
-				"disk_mbps_read_write": {
+				"ultra_ssd_disk_mbps_read_write": {
 					Type:     pluginsdk.TypeInt,
 					Optional: true,
 					Computed: true,
@@ -658,7 +537,7 @@ func OrchestratedVirtualMachineScaleSetOSDiskSchema() *pluginsdk.Schema {
 					// Changing property 'osDisk.managedDisk.storageAccountType' is not allowed
 					ForceNew: true,
 					ValidateFunc: validation.StringInSlice([]string{
-						// note: OS Disks don't support Ultra SSDs
+						// NOTE: OS Disks don't support Ultra SSDs
 						string(compute.StorageAccountTypesPremiumLRS),
 						string(compute.StorageAccountTypesStandardLRS),
 						string(compute.StorageAccountTypesStandardSSDLRS),
@@ -680,7 +559,16 @@ func OrchestratedVirtualMachineScaleSetOSDiskSchema() *pluginsdk.Schema {
 									string(compute.DiffDiskOptionsLocal),
 								}, false),
 							},
-						},
+							"placement": {
+								Type:     pluginsdk.TypeString,
+								Optional: true,
+								ForceNew: true,
+								Default:  string(compute.DiffDiskPlacementCacheDisk),
+								ValidateFunc: validation.StringInSlice([]string{
+									string(compute.DiffDiskPlacementCacheDisk),
+									string(compute.DiffDiskPlacementResourceDisk),
+								}, false),
+							}},
 					},
 				},
 
@@ -711,7 +599,7 @@ func OrchestratedVirtualMachineScaleSetOSDiskSchema() *pluginsdk.Schema {
 	}
 }
 
-func OrchestratedVirtualMachineScaleSetTerminateNotificationSchema() *pluginsdk.Schema {
+func OrchestratedVirtualMachineScaleSetTerminationNotificationSchema() *pluginsdk.Schema {
 	return &pluginsdk.Schema{
 		Type:     pluginsdk.TypeList,
 		Optional: true,
@@ -726,7 +614,7 @@ func OrchestratedVirtualMachineScaleSetTerminateNotificationSchema() *pluginsdk.
 				"timeout": {
 					Type:         pluginsdk.TypeString,
 					Optional:     true,
-					ValidateFunc: azValidate.ISO8601Duration,
+					ValidateFunc: azValidate.ISO8601DurationBetween("PT5M", "PT15M"),
 					Default:      "PT5M",
 				},
 			},
@@ -916,6 +804,7 @@ func validatePasswordComplexity(input interface{}, key string, min int, max int)
 func expandOrchestratedVirtualMachineScaleSetOsProfileWithWindowsConfiguration(input map[string]interface{}, customData string) *compute.VirtualMachineScaleSetOSProfile {
 	osProfile := compute.VirtualMachineScaleSetOSProfile{}
 	winConfig := compute.WindowsConfiguration{}
+	patchSettings := compute.PatchSettings{}
 
 	if len(input) > 0 {
 		osProfile.CustomData = utils.String(customData)
@@ -934,9 +823,20 @@ func expandOrchestratedVirtualMachineScaleSetOsProfileWithWindowsConfiguration(i
 		// winConfig.AdditionalUnattendContent = expandWindowsConfigurationAdditionalUnattendContent(input["additional_unattend_content"].([]interface{}))
 		winConfig.EnableAutomaticUpdates = utils.Bool(input["enable_automatic_updates"].(bool))
 		winConfig.ProvisionVMAgent = utils.Bool(input["provision_vm_agent"].(bool))
-		winConfig.TimeZone = utils.String(input["timezone"].(string))
 		winRmListenersRaw := input["winrm_listener"].(*pluginsdk.Set).List()
 		winConfig.WinRM = expandWinRMListener(winRmListenersRaw)
+
+		// Automatic VM Guest Patching and Hotpatching settings
+		patchSettings.PatchMode = compute.WindowsVMGuestPatchMode(input["patch_mode"].(string))
+		patchSettings.EnableHotpatching = utils.Bool(input["hotpatching_enabled"].(bool))
+		winConfig.PatchSettings = &patchSettings
+
+		// due to a change in RP behavor, it will now throw and error if we pass an empty
+		// string add check to only include it if it is actually defined in the config file
+		timeZone := input["timezone"].(string)
+		if timeZone != "" {
+			winConfig.TimeZone = utils.String(timeZone)
+		}
 	}
 
 	osProfile.WindowsConfiguration = &winConfig
@@ -947,6 +847,7 @@ func expandOrchestratedVirtualMachineScaleSetOsProfileWithWindowsConfiguration(i
 func expandOrchestratedVirtualMachineScaleSetOsProfileWithLinuxConfiguration(input map[string]interface{}, customData string) *compute.VirtualMachineScaleSetOSProfile {
 	osProfile := compute.VirtualMachineScaleSetOSProfile{}
 	linConfig := compute.LinuxConfiguration{}
+	patchSettings := compute.LinuxPatchSettings{}
 
 	if len(input) > 0 {
 		osProfile.CustomData = utils.String(customData)
@@ -973,6 +874,10 @@ func expandOrchestratedVirtualMachineScaleSetOsProfileWithLinuxConfiguration(inp
 
 		linConfig.DisablePasswordAuthentication = utils.Bool(input["disable_password_authentication"].(bool))
 		linConfig.ProvisionVMAgent = utils.Bool(input["provision_vm_agent"].(bool))
+
+		// Automatic VM Guest Patching
+		patchSettings.PatchMode = compute.LinuxVMGuestPatchMode(input["patch_mode"].(string))
+		linConfig.PatchSettings = &patchSettings
 	}
 
 	osProfile.LinuxConfiguration = &linConfig
@@ -980,7 +885,7 @@ func expandOrchestratedVirtualMachineScaleSetOsProfileWithLinuxConfiguration(inp
 	return &osProfile
 }
 
-// I am only commenting this out as this is going to be supported in the next release of the API in October 2021
+// I am only commenting this out as this is going to be supported in the next release of the API version 2021-10-01
 // func expandWindowsConfigurationAdditionalUnattendContent(input []interface{}) *[]compute.AdditionalUnattendContent {
 // 	output := make([]compute.AdditionalUnattendContent, 0)
 
@@ -999,37 +904,6 @@ func expandOrchestratedVirtualMachineScaleSetOsProfileWithLinuxConfiguration(inp
 
 // 	return &output
 // }
-
-func ExpandOrchestratedVirtualMachineScaleSetIdentity(input []interface{}) (*compute.VirtualMachineScaleSetIdentity, error) {
-	if len(input) == 0 {
-		// TODO: Does this want to be this, or nil?
-		return &compute.VirtualMachineScaleSetIdentity{
-			Type: compute.ResourceIdentityTypeNone,
-		}, nil
-	}
-
-	raw := input[0].(map[string]interface{})
-
-	identity := compute.VirtualMachineScaleSetIdentity{
-		Type: compute.ResourceIdentityType(raw["type"].(string)),
-	}
-
-	identityIdsRaw := raw["identity_ids"].(*pluginsdk.Set).List()
-	identityIds := make(map[string]*compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue)
-	for _, v := range identityIdsRaw {
-		identityIds[v.(string)] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
-	}
-
-	if len(identityIds) > 0 {
-		if identity.Type != compute.ResourceIdentityTypeUserAssigned && identity.Type != compute.ResourceIdentityTypeSystemAssignedUserAssigned {
-			return nil, fmt.Errorf("`identity_ids` can only be specified when `type` includes `UserAssigned`")
-		}
-
-		identity.UserAssignedIdentities = identityIds
-	}
-
-	return &identity, nil
-}
 
 func ExpandOrchestratedVirtualMachineScaleSetNetworkInterface(input []interface{}) (*[]compute.VirtualMachineScaleSetNetworkConfiguration, error) {
 	output := make([]compute.VirtualMachineScaleSetNetworkConfiguration, 0)
@@ -1086,10 +960,6 @@ func expandOrchestratedVirtualMachineScaleSetIPConfiguration(raw map[string]inte
 	loadBalancerBackendAddressPoolIdsRaw := raw["load_balancer_backend_address_pool_ids"].(*pluginsdk.Set).List()
 	loadBalancerBackendAddressPoolIds := expandIDsToSubResources(loadBalancerBackendAddressPoolIdsRaw)
 
-	// Removed per service team this attribute will never be used in VMSS Flex
-	// loadBalancerInboundNatPoolIdsRaw := raw["load_balancer_inbound_nat_rules_ids"].(*pluginsdk.Set).List()
-	// loadBalancerInboundNatPoolIds := expandIDsToSubResources(loadBalancerInboundNatPoolIdsRaw)
-
 	primary := raw["primary"].(bool)
 	version := compute.IPVersion(raw["version"].(string))
 	if primary && version == compute.IPVersionIPv6 {
@@ -1104,8 +974,7 @@ func expandOrchestratedVirtualMachineScaleSetIPConfiguration(raw map[string]inte
 			ApplicationGatewayBackendAddressPools: applicationGatewayBackendAddressPoolIds,
 			ApplicationSecurityGroups:             applicationSecurityGroupIds,
 			LoadBalancerBackendAddressPools:       loadBalancerBackendAddressPoolIds,
-			// Removed per service team this attribute will never be used in VMSS Flex
-			// LoadBalancerInboundNatPools:           loadBalancerInboundNatPoolIds,
+			// LoadBalancerInboundNatPools removed per service team this attribute will never be used in VMSS Flex
 		},
 	}
 
@@ -1218,10 +1087,6 @@ func expandOrchestratedVirtualMachineScaleSetIPConfigurationUpdate(raw map[strin
 	loadBalancerBackendAddressPoolIdsRaw := raw["load_balancer_backend_address_pool_ids"].(*pluginsdk.Set).List()
 	loadBalancerBackendAddressPoolIds := expandIDsToSubResources(loadBalancerBackendAddressPoolIdsRaw)
 
-	// Removed per service team this attribute will never be used in VMSS Flex
-	// loadBalancerInboundNatPoolIdsRaw := raw["load_balancer_inbound_nat_rules_ids"].(*pluginsdk.Set).List()
-	// loadBalancerInboundNatPoolIds := expandIDsToSubResources(loadBalancerInboundNatPoolIdsRaw)
-
 	primary := raw["primary"].(bool)
 	version := compute.IPVersion(raw["version"].(string))
 
@@ -1237,8 +1102,7 @@ func expandOrchestratedVirtualMachineScaleSetIPConfigurationUpdate(raw map[strin
 			ApplicationGatewayBackendAddressPools: applicationGatewayBackendAddressPoolIds,
 			ApplicationSecurityGroups:             applicationSecurityGroupIds,
 			LoadBalancerBackendAddressPools:       loadBalancerBackendAddressPoolIds,
-			// Removed per service team this attribute will never be used in VMSS Flex
-			// LoadBalancerInboundNatPools:           loadBalancerInboundNatPoolIds,
+			// LoadBalancerInboundNatPools removed per service team this attribute will never be used in VMSS Flex
 		},
 	}
 
@@ -1301,19 +1165,27 @@ func ExpandOrchestratedVirtualMachineScaleSetDataDisk(input []interface{}, ultra
 			}
 		}
 
-		if iops := raw["disk_iops_read_write"].(int); iops != 0 {
-			if !ultraSSDEnabled {
-				return nil, fmt.Errorf("`disk_iops_read_write` are only available for UltraSSD disks")
-			}
-			disk.DiskIOPSReadWrite = utils.Int64(int64(iops))
+		var iops int
+		if diskIops, ok := raw["disk_iops_read_write"]; ok && diskIops.(int) > 0 {
+			iops = diskIops.(int)
+		} else if ssdIops, ok := raw["ultra_ssd_disk_iops_read_write"]; ok && ssdIops.(int) > 0 {
+			iops = ssdIops.(int)
 		}
+		if iops > 0 && !ultraSSDEnabled {
+			return nil, fmt.Errorf("disk_iops_read_write and ultra_ssd_disk_iops_read_write are only available for UltraSSD disks")
+		}
+		disk.DiskIOPSReadWrite = utils.Int64(int64(iops))
 
-		if mbps := raw["disk_mbps_read_write"].(int); mbps != 0 {
-			if !ultraSSDEnabled {
-				return nil, fmt.Errorf("`disk_mbps_read_write` are only available for UltraSSD disks")
-			}
-			disk.DiskMBpsReadWrite = utils.Int64(int64(mbps))
+		var mbps int
+		if diskMbps, ok := raw["disk_mbps_read_write"]; ok && diskMbps.(int) > 0 {
+			mbps = diskMbps.(int)
+		} else if ssdMbps, ok := raw["ultra_ssd_disk_mbps_read_write"]; ok && ssdMbps.(int) > 0 {
+			mbps = ssdMbps.(int)
 		}
+		if mbps > 0 && !ultraSSDEnabled {
+			return nil, fmt.Errorf("disk_mbps_read_write and ultra_ssd_disk_mbps_read_write are only available for UltraSSD disks")
+		}
+		disk.DiskMBpsReadWrite = utils.Int64(int64(mbps))
 
 		disks = append(disks, disk)
 	}
@@ -1348,7 +1220,8 @@ func ExpandOrchestratedVirtualMachineScaleSetOSDisk(input []interface{}, osType 
 	if diffDiskSettingsRaw := raw["diff_disk_settings"].([]interface{}); len(diffDiskSettingsRaw) > 0 {
 		diffDiskRaw := diffDiskSettingsRaw[0].(map[string]interface{})
 		disk.DiffDiskSettings = &compute.DiffDiskSettings{
-			Option: compute.DiffDiskOptions(diffDiskRaw["option"].(string)),
+			Option:    compute.DiffDiskOptions(diffDiskRaw["option"].(string)),
+			Placement: compute.DiffDiskPlacement(diffDiskRaw["placement"].(string)),
 		}
 	}
 
@@ -1408,136 +1281,178 @@ func ExpandOrchestratedVirtualMachineScaleSetAutomaticRepairsPolicy(input []inte
 	}
 }
 
-// func expandOrchestratedVirtualMachineScaleSetExtensions(input []interface{}) (extensionProfile *compute.VirtualMachineScaleSetExtensionProfile, err error) {
-// 	extensionProfile = &compute.VirtualMachineScaleSetExtensionProfile{}
-// 	if len(input) == 0 {
-// 		return nil, nil
-// 	}
+func expandOrchestratedVirtualMachineScaleSetExtensions(input []interface{}) (extensionProfile *compute.VirtualMachineScaleSetExtensionProfile, hasHealthExtension bool, err error) {
+	extensionProfile = &compute.VirtualMachineScaleSetExtensionProfile{}
+	if len(input) == 0 {
+		return nil, false, nil
+	}
 
-// 	extensions := make([]compute.VirtualMachineScaleSetExtension, 0)
-// 	for _, v := range input {
-// 		extensionRaw := v.(map[string]interface{})
-// 		extension := compute.VirtualMachineScaleSetExtension{
-// 			Name: utils.String(extensionRaw["name"].(string)),
-// 		}
-// 		extensionType := extensionRaw["type"].(string)
+	extensions := make([]compute.VirtualMachineScaleSetExtension, 0)
+	for _, v := range input {
+		extensionRaw := v.(map[string]interface{})
+		extension := compute.VirtualMachineScaleSetExtension{
+			Name: utils.String(extensionRaw["name"].(string)),
+		}
+		extensionType := extensionRaw["type"].(string)
 
-// 		extensionProps := compute.VirtualMachineScaleSetExtensionProperties{
-// 			Publisher:                utils.String(extensionRaw["publisher"].(string)),
-// 			Type:                     &extensionType,
-// 			TypeHandlerVersion:       utils.String(extensionRaw["type_handler_version"].(string)),
-// 			AutoUpgradeMinorVersion:  utils.Bool(extensionRaw["auto_upgrade_minor_version"].(bool)),
-// 			ProvisionAfterExtensions: utils.ExpandStringSlice(extensionRaw["provision_after_extensions"].([]interface{})),
-// 		}
+		extensionProps := compute.VirtualMachineScaleSetExtensionProperties{
+			Publisher:                utils.String(extensionRaw["publisher"].(string)),
+			Type:                     &extensionType,
+			TypeHandlerVersion:       utils.String(extensionRaw["type_handler_version"].(string)),
+			AutoUpgradeMinorVersion:  utils.Bool(extensionRaw["auto_upgrade_minor_version_enabled"].(bool)),
+			ProvisionAfterExtensions: utils.ExpandStringSlice(extensionRaw["extensions_to_provision_after_vm_creation"].([]interface{})),
+		}
 
-// 		// Leaving this here as it is going to be in the GA API
-// 		// if extensionType == "ApplicationHealthLinux" || extensionType == "ApplicationHealthWindows" {
-// 		// 	hasHealthExtension = true
-// 		// }
+		if extensionType == "ApplicationHealthLinux" || extensionType == "ApplicationHealthWindows" {
+			hasHealthExtension = true
+		}
 
-// 		if forceUpdateTag := extensionRaw["force_update_tag"]; forceUpdateTag != nil {
-// 			extensionProps.ForceUpdateTag = utils.String(forceUpdateTag.(string))
-// 		}
+		if forceUpdateTag := extensionRaw["force_extension_execution_on_change"]; forceUpdateTag != nil {
+			extensionProps.ForceUpdateTag = utils.String(forceUpdateTag.(string))
+		}
 
-// 		if val, ok := extensionRaw["settings"]; ok && val.(string) != "" {
-// 			settings, err := pluginsdk.ExpandJsonFromString(val.(string))
-// 			if err != nil {
-// 				return nil, fmt.Errorf("failed to parse JSON from `settings`: %+v", err)
-// 			}
-// 			extensionProps.Settings = settings
-// 		}
+		if val, ok := extensionRaw["settings"]; ok && val.(string) != "" {
+			settings, err := pluginsdk.ExpandJsonFromString(val.(string))
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to parse JSON from `settings`: %+v", err)
+			}
+			extensionProps.Settings = settings
+		}
 
-// 		if val, ok := extensionRaw["protected_settings"]; ok && val.(string) != "" {
-// 			protectedSettings, err := pluginsdk.ExpandJsonFromString(val.(string))
-// 			if err != nil {
-// 				return nil, fmt.Errorf("failed to parse JSON from `protected_settings`: %+v", err)
-// 			}
-// 			extensionProps.ProtectedSettings = protectedSettings
-// 		}
+		if val, ok := extensionRaw["protected_settings"]; ok && val.(string) != "" {
+			protectedSettings, err := pluginsdk.ExpandJsonFromString(val.(string))
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to parse JSON from `protected_settings`: %+v", err)
+			}
+			extensionProps.ProtectedSettings = protectedSettings
+		}
 
-// 		extension.VirtualMachineScaleSetExtensionProperties = &extensionProps
-// 		extensions = append(extensions, extension)
-// 	}
-// 	extensionProfile.Extensions = &extensions
+		extension.VirtualMachineScaleSetExtensionProperties = &extensionProps
+		extensions = append(extensions, extension)
+	}
+	extensionProfile.Extensions = &extensions
 
-// 	return extensionProfile, nil
-// }
+	return extensionProfile, hasHealthExtension, nil
+}
 
-// func flattenOrchestratedVirtualMachineScaleSetExtensions(input *compute.VirtualMachineScaleSetExtensionProfile, d *pluginsdk.ResourceData) ([]map[string]interface{}, error) {
-// 	result := make([]map[string]interface{}, 0)
-// 	if input == nil || input.Extensions == nil {
-// 		return result, nil
-// 	}
+func expandOrchestratedSourceImageReference(referenceInput []interface{}, imageId string) *compute.ImageReference {
+	if len(referenceInput) == 0 {
+		return nil
+	}
 
-// 	for k, v := range *input.Extensions {
-// 		name := ""
-// 		if v.Name != nil {
-// 			name = *v.Name
-// 		}
+	if imageId != "" {
+		return &compute.ImageReference{
+			ID: utils.String(imageId),
+		}
+	}
 
-// 		autoUpgradeMinorVersion := false
-// 		forceUpdateTag := ""
-// 		provisionAfterExtension := make([]interface{}, 0)
-// 		protectedSettings := ""
-// 		extPublisher := ""
-// 		extSettings := ""
-// 		extType := ""
-// 		extTypeVersion := ""
+	raw := referenceInput[0].(map[string]interface{})
+	return &compute.ImageReference{
+		Publisher: utils.String(raw["publisher"].(string)),
+		Offer:     utils.String(raw["offer"].(string)),
+		Sku:       utils.String(raw["sku"].(string)),
+		Version:   utils.String(raw["version"].(string)),
+	}
+}
 
-// 		if props := v.VirtualMachineScaleSetExtensionProperties; props != nil {
-// 			if props.Publisher != nil {
-// 				extPublisher = *props.Publisher
-// 			}
+func flattenOrchestratedVirtualMachineScaleSetExtensions(input *compute.VirtualMachineScaleSetExtensionProfile, d *pluginsdk.ResourceData) ([]map[string]interface{}, error) {
+	result := make([]map[string]interface{}, 0)
+	if input == nil || input.Extensions == nil {
+		return result, nil
+	}
 
-// 			if props.Type != nil {
-// 				extType = *props.Type
-// 			}
+	// extensionsFromState holds the "extension" block, which is used to retrieve the "protected_settings" to fill it back the state,
+	// since it is not returned from the API.
+	extensionsFromState := map[string]map[string]interface{}{}
+	if extSet, ok := d.GetOk("extension"); ok && extSet != nil {
+		extensions := extSet.(*pluginsdk.Set).List()
+		for _, ext := range extensions {
+			if ext == nil {
+				continue
+			}
+			ext := ext.(map[string]interface{})
+			extensionsFromState[ext["name"].(string)] = ext
+		}
+	}
 
-// 			if props.TypeHandlerVersion != nil {
-// 				extTypeVersion = *props.TypeHandlerVersion
-// 			}
+	for _, v := range *input.Extensions {
+		name := ""
+		if v.Name != nil {
+			name = *v.Name
+		}
 
-// 			if props.AutoUpgradeMinorVersion != nil {
-// 				autoUpgradeMinorVersion = *props.AutoUpgradeMinorVersion
-// 			}
+		autoUpgradeMinorVersion := false
+		// Automatic Upgrade is not yet supported in VMSS Flex
+		// enableAutomaticUpgrade := false
+		forceUpdateTag := ""
+		provisionAfterExtension := make([]interface{}, 0)
+		protectedSettings := ""
+		extPublisher := ""
+		extSettings := ""
+		extType := ""
+		extTypeVersion := ""
 
-// 			if props.ForceUpdateTag != nil {
-// 				forceUpdateTag = *props.ForceUpdateTag
-// 			}
+		if props := v.VirtualMachineScaleSetExtensionProperties; props != nil {
+			if props.Publisher != nil {
+				extPublisher = *props.Publisher
+			}
 
-// 			if props.ProvisionAfterExtensions != nil {
-// 				provisionAfterExtension = utils.FlattenStringSlice(props.ProvisionAfterExtensions)
-// 			}
+			if props.Type != nil {
+				extType = *props.Type
+			}
 
-// 			if props.Settings != nil {
-// 				extSettingsRaw, err := pluginsdk.FlattenJsonToString(props.Settings.(map[string]interface{}))
-// 				if err != nil {
-// 					return nil, err
-// 				}
-// 				extSettings = extSettingsRaw
-// 			}
-// 		}
-// 		// protected_settings isn't returned, so we attempt to get it from config otherwise set to empty string
-// 		if protectedSettingsFromConfig, ok := d.GetOk(fmt.Sprintf("extension.%d.protected_settings", k)); ok {
-// 			if protectedSettingsFromConfig.(string) != "" && protectedSettingsFromConfig.(string) != "{}" {
-// 				protectedSettings = protectedSettingsFromConfig.(string)
-// 			}
-// 		}
+			if props.TypeHandlerVersion != nil {
+				extTypeVersion = *props.TypeHandlerVersion
+			}
 
-// 		result = append(result, map[string]interface{}{
-// 			"name":                       name,
-// 			"auto_upgrade_minor_version": autoUpgradeMinorVersion,
-// 			"force_update_tag":           forceUpdateTag,
-// 			"provision_after_extensions": provisionAfterExtension,
-// 			"protected_settings":         protectedSettings,
-// 			"publisher":                  extPublisher,
-// 			"settings":                   extSettings,
-// 			"type":                       extType,
-// 			"type_handler_version":       extTypeVersion,
-// 		})
-// 	}
-// 	return result, nil
-// }
+			if props.AutoUpgradeMinorVersion != nil {
+				autoUpgradeMinorVersion = *props.AutoUpgradeMinorVersion
+			}
+
+			// if props.EnableAutomaticUpgrade != nil {
+			// 	enableAutomaticUpgrade = *props.EnableAutomaticUpgrade
+			// }
+
+			if props.ForceUpdateTag != nil {
+				forceUpdateTag = *props.ForceUpdateTag
+			}
+
+			if props.ProvisionAfterExtensions != nil {
+				provisionAfterExtension = utils.FlattenStringSlice(props.ProvisionAfterExtensions)
+			}
+
+			if props.Settings != nil {
+				extSettingsRaw, err := pluginsdk.FlattenJsonToString(props.Settings.(map[string]interface{}))
+				if err != nil {
+					return nil, err
+				}
+				extSettings = extSettingsRaw
+			}
+		}
+		// protected_settings isn't returned, so we attempt to get it from state otherwise set to empty string
+		if ext, ok := extensionsFromState[name]; ok {
+			if protectedSettingsFromState, ok := ext["protected_settings"]; ok {
+				if protectedSettingsFromState.(string) != "" && protectedSettingsFromState.(string) != "{}" {
+					protectedSettings = protectedSettingsFromState.(string)
+				}
+			}
+		}
+
+		result = append(result, map[string]interface{}{
+			"name":                               name,
+			"auto_upgrade_minor_version_enabled": autoUpgradeMinorVersion,
+			// "automatic_upgrade_enabled":  enableAutomaticUpgrade,
+			"force_extension_execution_on_change":       forceUpdateTag,
+			"extensions_to_provision_after_vm_creation": provisionAfterExtension,
+			"protected_settings":                        protectedSettings,
+			"publisher":                                 extPublisher,
+			"settings":                                  extSettings,
+			"type":                                      extType,
+			"type_handler_version":                      extTypeVersion,
+		})
+	}
+	return result, nil
+}
 
 func FlattenOrchestratedVirtualMachineScaleSetIPConfiguration(input compute.VirtualMachineScaleSetIPConfiguration) map[string]interface{} {
 	var name, subnetId string
@@ -1561,8 +1476,6 @@ func FlattenOrchestratedVirtualMachineScaleSetIPConfiguration(input compute.Virt
 	applicationGatewayBackendAddressPoolIds := flattenSubResourcesToIDs(input.ApplicationGatewayBackendAddressPools)
 	applicationSecurityGroupIds := flattenSubResourcesToIDs(input.ApplicationSecurityGroups)
 	loadBalancerBackendAddressPoolIds := flattenSubResourcesToIDs(input.LoadBalancerBackendAddressPools)
-	// Removed per service team this attribute will never be used in VMSS Flex
-	// loadBalancerInboundNatRuleIds := flattenSubResourcesToIDs(input.LoadBalancerInboundNatPools)
 
 	return map[string]interface{}{
 		"name":              name,
@@ -1573,8 +1486,7 @@ func FlattenOrchestratedVirtualMachineScaleSetIPConfiguration(input compute.Virt
 		"application_gateway_backend_address_pool_ids": applicationGatewayBackendAddressPoolIds,
 		"application_security_group_ids":               applicationSecurityGroupIds,
 		"load_balancer_backend_address_pool_ids":       loadBalancerBackendAddressPoolIds,
-		// Removed per service team this attribute will never be used in VMSS Flex
-		// "load_balancer_inbound_nat_rules_ids":          loadBalancerInboundNatRuleIds,
+		// load_balancer_inbound_nat_rules_ids removed per service team this attribute will never be used in VMSS Flex
 	}
 }
 
@@ -1631,6 +1543,7 @@ func flattenOrchestratedVirtualMachineScaleSetWindowsConfiguration(input *comput
 
 	output := make(map[string]interface{})
 	winConfig := input.WindowsConfiguration
+	patchSettings := winConfig.PatchSettings
 
 	if v := input.AdminUsername; v != nil {
 		output["admin_username"] = *v
@@ -1673,6 +1586,17 @@ func flattenOrchestratedVirtualMachineScaleSetWindowsConfiguration(input *comput
 		output["timezone"] = v
 	}
 
+	output["patch_mode"] = string(compute.WindowsVMGuestPatchModeAutomaticByOS)
+	output["hotpatching_enabled"] = false
+
+	if patchSettings != nil {
+		output["patch_mode"] = string(patchSettings.PatchMode)
+
+		if v := patchSettings.EnableHotpatching; v != nil {
+			output["hotpatching_enabled"] = *v
+		}
+	}
+
 	return []interface{}{output}
 }
 
@@ -1696,9 +1620,9 @@ func flattenOrchestratedVirtualMachineScaleSetLinuxConfiguration(input *compute.
 		}
 	}
 
-	// if v := input.AdminPassword; v != nil {
-	// 	output["admin_password"] = *v
-	// }
+	if v := input.AdminPassword; v != nil {
+		output["admin_password"] = *v
+	}
 
 	if v := linConfig.SSH; v != nil {
 		if sshKeys, _ := FlattenSSHKeys(v); sshKeys != nil {
@@ -1712,6 +1636,10 @@ func flattenOrchestratedVirtualMachineScaleSetLinuxConfiguration(input *compute.
 
 	if v := linConfig.DisablePasswordAuthentication; v != nil {
 		output["disable_password_authentication"] = *v
+	}
+
+	if v := linConfig.PatchSettings; v != nil {
+		output["patch_mode"] = v.PatchMode
 	}
 
 	if v := linConfig.ProvisionVMAgent; v != nil {
@@ -1778,36 +1706,6 @@ func FlattenOrchestratedVirtualMachineScaleSetNetworkInterface(input *[]compute.
 	return results
 }
 
-func FlattenOrchestratedVirtualMachineScaleSetIdentity(input *compute.VirtualMachineScaleSetIdentity) ([]interface{}, error) {
-	if input == nil || input.Type == compute.ResourceIdentityTypeNone {
-		return []interface{}{}, nil
-	}
-
-	identityIds := make([]string, 0)
-	if input.UserAssignedIdentities != nil {
-		for key := range input.UserAssignedIdentities {
-			parsedId, err := msiparse.UserAssignedIdentityIDInsensitively(key)
-			if err != nil {
-				return nil, err
-			}
-			identityIds = append(identityIds, parsedId.ID())
-		}
-	}
-
-	principalId := ""
-	if input.PrincipalID != nil {
-		principalId = *input.PrincipalID
-	}
-
-	return []interface{}{
-		map[string]interface{}{
-			"type":         string(input.Type),
-			"identity_ids": identityIds,
-			"principal_id": principalId,
-		},
-	}, nil
-}
-
 func FlattenOrchestratedVirtualMachineScaleSetDataDisk(input *[]compute.VirtualMachineScaleSetDataDisk) []interface{} {
 	if input == nil {
 		return []interface{}{}
@@ -1851,15 +1749,15 @@ func FlattenOrchestratedVirtualMachineScaleSetDataDisk(input *[]compute.VirtualM
 		}
 
 		output = append(output, map[string]interface{}{
-			"caching":                   string(v.Caching),
-			"create_option":             string(v.CreateOption),
-			"lun":                       lun,
-			"disk_encryption_set_id":    diskEncryptionSetId,
-			"disk_size_gb":              diskSizeGb,
-			"storage_account_type":      storageAccountType,
-			"write_accelerator_enabled": writeAcceleratorEnabled,
-			"disk_iops_read_write":      iops,
-			"disk_mbps_read_write":      mbps,
+			"caching":                        string(v.Caching),
+			"create_option":                  string(v.CreateOption),
+			"lun":                            lun,
+			"disk_encryption_set_id":         diskEncryptionSetId,
+			"disk_size_gb":                   diskSizeGb,
+			"storage_account_type":           storageAccountType,
+			"write_accelerator_enabled":      writeAcceleratorEnabled,
+			"ultra_ssd_disk_iops_read_write": iops,
+			"ultra_ssd_disk_mbps_read_write": mbps,
 		})
 	}
 
@@ -1893,7 +1791,8 @@ func FlattenOrchestratedVirtualMachineScaleSetOSDisk(input *compute.VirtualMachi
 	diffDiskSettings := make([]interface{}, 0)
 	if input.DiffDiskSettings != nil {
 		diffDiskSettings = append(diffDiskSettings, map[string]interface{}{
-			"option": string(input.DiffDiskSettings.Option),
+			"option":    string(input.DiffDiskSettings.Option),
+			"placement": string(input.DiffDiskSettings.Placement),
 		})
 	}
 

@@ -31,7 +31,7 @@ The following attributes are exported:
 
 * `account_name` - The name of the Batch account.
 
-* `node_agent_sku_id` - The Sku of the node agents in the Batch pool.
+* `node_agent_sku_id` - The SKU of the node agents in the Batch pool.
 
 * `vm_size` - The size of the VM created in the Batch pool.
 
@@ -73,11 +73,11 @@ A `start_task` block exports the following:
 
 * `command_line` - The command line executed by the start task.
 
-* `max_task_retry_count` - The number of retry count.
+* `task_retry_maximum` - The number of retry count
 
 * `wait_for_success` - A flag that indicates if the Batch pool should wait for the start task to be completed.
 
-* `environment` - A map of strings (key,value) that represents the environment variables to set in the start task.
+* `common_environment_properties` - A map of strings (key,value) that represents the environment variables to set in the start task.
 
 * `user_identity` - A `user_identity` block that describes the user identity under which the start task runs.
 

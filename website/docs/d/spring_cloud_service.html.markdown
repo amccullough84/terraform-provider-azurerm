@@ -23,7 +23,7 @@ data "azurerm_spring_cloud_service" "example" {
 }
 
 output "spring_cloud_service_id" {
-  value = "${data.azurerm_spring_cloud_service.example.id}"
+  value = data.azurerm_spring_cloud_service.example.id
 }
 ```
 
@@ -89,9 +89,9 @@ The `repository` block contains the following:
 
 The `http_basic_auth` block supports the following:
 
-* `username` - The username used to access the Http Basic Authentication Git repository server.
+* `username` - The username used to access the HTTP Basic Authentication Git repository server.
 
-* `password` - The password used to access the Http Basic Authentication Git repository server.
+* `password` - The password used to access the HTTP Basic Authentication Git repository server.
 
 ---
 
@@ -113,7 +113,7 @@ The `required_network_traffic_rules` supports the following:
 
 * `fqdns` - The FQDN list of required traffic.
 
-* `ips` - The ip list of required traffic.
+* `ip_addresses` - The IP list of required traffic.
 
 * `port` - The port of required traffic.
 

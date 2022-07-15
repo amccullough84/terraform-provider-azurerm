@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-provider-azurerm/helpers/azure"
+	"github.com/hashicorp/go-azure-helpers/resourcemanager/commonschema"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/services/batch/parse"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/batch/validate"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
-	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/validation"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/timeouts"
 	"github.com/hashicorp/terraform-provider-azurerm/utils"
 )
@@ -27,7 +27,7 @@ func dataSourceBatchPool() *pluginsdk.Resource {
 				Required:     true,
 				ValidateFunc: validate.PoolName,
 			},
-			"resource_group_name": azure.SchemaResourceGroupNameForDataSource(),
+			"resource_group_name": commonschema.ResourceGroupNameForDataSource(),
 			"account_name": {
 				Type:         pluginsdk.TypeString,
 				Required:     true,
@@ -161,30 +161,24 @@ func dataSourceBatchPool() *pluginsdk.Resource {
 			},
 			"certificate": {
 				Type:     pluginsdk.TypeList,
-				Optional: true,
+				Computed: true,
 				Elem: &pluginsdk.Resource{
 					Schema: map[string]*pluginsdk.Schema{
 						"id": {
-							Type:         pluginsdk.TypeString,
-							Required:     true,
-							ValidateFunc: azure.ValidateResourceID,
+							Type:     pluginsdk.TypeString,
+							Computed: true,
 						},
 						"store_location": {
 							Type:     pluginsdk.TypeString,
-							Required: true,
-							ValidateFunc: validation.StringInSlice([]string{
-								"CurrentUser",
-								"LocalMachine",
-							}, false),
+							Computed: true,
 						},
 						"store_name": {
-							Type:         pluginsdk.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringIsNotEmpty,
+							Type:     pluginsdk.TypeString,
+							Computed: true,
 						},
 						"visibility": {
 							Type:     pluginsdk.TypeSet,
-							Optional: true,
+							Computed: true,
 							Elem: &pluginsdk.Schema{
 								Type: pluginsdk.TypeString,
 							},
@@ -194,97 +188,9 @@ func dataSourceBatchPool() *pluginsdk.Resource {
 			},
 			"start_task": {
 				Type:     pluginsdk.TypeList,
-				Optional: true,
-				MaxItems: 1,
+				Computed: true,
 				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"command_line": {
-							Type:     pluginsdk.TypeString,
-							Required: true,
-						},
-
-						"max_task_retry_count": {
-							Type:     pluginsdk.TypeInt,
-							Optional: true,
-							Default:  1,
-						},
-
-						"wait_for_success": {
-							Type:     pluginsdk.TypeBool,
-							Optional: true,
-							Default:  false,
-						},
-
-						"environment": {
-							Type:     pluginsdk.TypeMap,
-							Optional: true,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-							},
-						},
-
-						"user_identity": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Resource{
-								Schema: map[string]*pluginsdk.Schema{
-									"user_name": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-									"auto_user": {
-										Type:     pluginsdk.TypeList,
-										Computed: true,
-										Elem: &pluginsdk.Resource{
-											Schema: map[string]*pluginsdk.Schema{
-												"elevation_level": {
-													Type:     pluginsdk.TypeString,
-													Computed: true,
-												},
-												"scope": {
-													Type:     pluginsdk.TypeString,
-													Computed: true,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-
-						"resource_file": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Resource{
-								Schema: map[string]*pluginsdk.Schema{
-									"auto_storage_container_name": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-									"blob_prefix": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-									"file_mode": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-									"file_path": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-									"http_url": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-									"storage_container_url": {
-										Type:     pluginsdk.TypeString,
-										Computed: true,
-									},
-								},
-							},
-						},
-					},
+					Schema: startTaskDSSchema(),
 				},
 			},
 			"metadata": {
@@ -300,6 +206,17 @@ func dataSourceBatchPool() *pluginsdk.Resource {
 				Elem: &pluginsdk.Resource{
 					Schema: map[string]*pluginsdk.Schema{
 						"subnet_id": {
+							Type:     pluginsdk.TypeString,
+							Computed: true,
+						},
+						"public_ips": {
+							Type:     pluginsdk.TypeSet,
+							Computed: true,
+							Elem: &pluginsdk.Schema{
+								Type: pluginsdk.TypeString,
+							},
+						},
+						"public_address_provisioning_type": {
 							Type:     pluginsdk.TypeString,
 							Computed: true,
 						},
@@ -354,28 +271,118 @@ func dataSourceBatchPool() *pluginsdk.Resource {
 	}
 }
 
+func startTaskDSSchema() map[string]*pluginsdk.Schema {
+	s := map[string]*pluginsdk.Schema{
+		"command_line": {
+			Type:     pluginsdk.TypeString,
+			Computed: true,
+		},
+
+		"task_retry_maximum": {
+			Type:     pluginsdk.TypeInt,
+			Computed: true,
+		},
+
+		"wait_for_success": {
+			Type:     pluginsdk.TypeBool,
+			Computed: true,
+		},
+
+		"common_environment_properties": {
+			Type:     pluginsdk.TypeMap,
+			Optional: true,
+			// Computed: true,
+			Elem: &pluginsdk.Schema{
+				Type: pluginsdk.TypeString,
+			},
+		},
+
+		"user_identity": {
+			Type:     pluginsdk.TypeList,
+			Computed: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"user_name": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"auto_user": {
+						Type:     pluginsdk.TypeList,
+						Computed: true,
+						Elem: &pluginsdk.Resource{
+							Schema: map[string]*pluginsdk.Schema{
+								"elevation_level": {
+									Type:     pluginsdk.TypeString,
+									Computed: true,
+								},
+								"scope": {
+									Type:     pluginsdk.TypeString,
+									Computed: true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
+		"resource_file": {
+			Type:     pluginsdk.TypeList,
+			Computed: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"auto_storage_container_name": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"blob_prefix": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"file_mode": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"file_path": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"http_url": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"storage_container_url": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+				},
+			},
+		},
+	}
+	return s
+}
+
 func dataSourceBatchPoolRead(d *pluginsdk.ResourceData, meta interface{}) error {
 	client := meta.(*clients.Client).Batch.PoolClient
+	subscriptionId := meta.(*clients.Client).Account.SubscriptionId
 	ctx, cancel := timeouts.ForRead(meta.(*clients.Client).StopContext, d)
 	defer cancel()
 
-	name := d.Get("name").(string)
-	accountName := d.Get("account_name").(string)
-	resourceGroup := d.Get("resource_group_name").(string)
+	id := parse.NewPoolID(subscriptionId, d.Get("resource_group_name").(string), d.Get("account_name").(string), d.Get("name").(string))
 
-	resp, err := client.Get(ctx, resourceGroup, accountName, name)
+	resp, err := client.Get(ctx, id.ResourceGroup, id.BatchAccountName, id.Name)
 	if err != nil {
 		if utils.ResponseWasNotFound(resp.Response) {
-			return fmt.Errorf("Error: Batch pool %q in account %q (Resource Group %q) was not found", name, accountName, resourceGroup)
+			return fmt.Errorf("%s was not found", id)
 		}
-		return fmt.Errorf("making Read request on AzureRM Batch pool %q: %+v", name, err)
+		return fmt.Errorf("retrieving %s: %+v", id, err)
 	}
 
-	d.SetId(*resp.ID)
+	d.SetId(id.ID())
 
-	d.Set("name", name)
-	d.Set("account_name", accountName)
-	d.Set("resource_group_name", resourceGroup)
+	d.Set("name", id.Name)
+	d.Set("account_name", id.BatchAccountName)
+	d.Set("resource_group_name", id.ResourceGroup)
 
 	if props := resp.PoolProperties; props != nil {
 		d.Set("vm_size", props.VMSize)

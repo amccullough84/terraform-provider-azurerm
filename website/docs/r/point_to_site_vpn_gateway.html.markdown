@@ -97,7 +97,7 @@ The following arguments are supported:
 
 * `connection_configuration` - (Required) A `connection_configuration` block as defined below.
 
-* `scale_unit` - (Required) The [Scale Unit](https://docs.microsoft.com/en-us/azure/virtual-wan/virtual-wan-faq#what-is-a-virtual-wan-gateway-scale-unit) for this Point-to-Site VPN Gateway.
+* `scale_unit` - (Required) The [Scale Unit](https://docs.microsoft.com/azure/virtual-wan/virtual-wan-faq#what-is-a-virtual-wan-gateway-scale-unit) for this Point-to-Site VPN Gateway.
 
 * `virtual_hub_id` - (Required) The ID of the Virtual Hub where this Point-to-Site VPN Gateway should exist. Changing this forces a new resource to be created.
 
@@ -116,6 +116,8 @@ A `connection_configuration` block supports the following:
 * `vpn_client_address_pool` - (Required) A `vpn_client_address_pool` block as defined below.
 
 * `route` - (Optional) A `route` block as defined below.
+
+* `internet_security_enabled` - (Optional) Should Internet Security be enabled to secure internet traffic? Changing this forces a new resource to be created. Defaults to false.
 
 ---
 

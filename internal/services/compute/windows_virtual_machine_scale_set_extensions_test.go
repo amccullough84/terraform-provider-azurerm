@@ -19,9 +19,7 @@ func TestAccWindowsVirtualMachineScaleSet_extensionDoNotRunOnOverProvisionedMach
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
 		},
-		data.ImportStep(
-			"admin_password",
-		),
+		data.ImportStep("admin_password"),
 	})
 }
 
@@ -36,27 +34,21 @@ func TestAccWindowsVirtualMachineScaleSet_extensionsDoNotRunOnOverProvisionedMac
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
 		},
-		data.ImportStep(
-			"admin_password",
-		),
+		data.ImportStep("admin_password"),
 		{
 			Config: r.extensionDoNotRunOnOverProvisionedMachines(data, true),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
 		},
-		data.ImportStep(
-			"admin_password",
-		),
+		data.ImportStep("admin_password"),
 		{
 			Config: r.extensionDoNotRunOnOverProvisionedMachines(data, false),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
 		},
-		data.ImportStep(
-			"admin_password",
-		),
+		data.ImportStep("admin_password"),
 	})
 }
 
@@ -985,7 +977,7 @@ resource "azurerm_service_fabric_cluster" "test" {
   location             = azurerm_resource_group.test.location
   reliability_level    = "Silver"
   upgrade_mode         = "Manual"
-  cluster_code_version = "8.0.516.9590"
+  cluster_code_version = "8.2.1486.9590"
   vm_image             = "Windows"
   management_endpoint  = "http://example:80"
 

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-azure-helpers/lang/response"
+	"github.com/hashicorp/go-azure-helpers/resourcemanager/commonschema"
+	"github.com/hashicorp/go-azure-helpers/resourcemanager/tags"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/azure"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/tf"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/validate"
@@ -16,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/frontdoor/parse"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/frontdoor/sdk/2020-05-01/frontdoors"
 	azValidate "github.com/hashicorp/terraform-provider-azurerm/internal/services/frontdoor/validate"
-	"github.com/hashicorp/terraform-provider-azurerm/internal/tags"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/validation"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/timeouts"
@@ -48,502 +49,7 @@ func resourceFrontDoor() *pluginsdk.Resource {
 			Delete: pluginsdk.DefaultTimeout(6 * time.Hour),
 		},
 
-		Schema: map[string]*pluginsdk.Schema{
-			"name": {
-				Type:         pluginsdk.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				ValidateFunc: azValidate.FrontDoorName,
-			},
-
-			"cname": {
-				Type:     pluginsdk.TypeString,
-				Computed: true,
-			},
-
-			"header_frontdoor_id": {
-				Type:     pluginsdk.TypeString,
-				Computed: true,
-			},
-
-			"friendly_name": {
-				Type:     pluginsdk.TypeString,
-				Optional: true,
-			},
-
-			"load_balancer_enabled": {
-				Type:     pluginsdk.TypeBool,
-				Optional: true,
-				Default:  true,
-			},
-
-			// TODO: In 3.0
-			// Move 'enforce_backend_pools_certificate_name_check' and 'backend_pools_send_receive_timeout_seconds'
-			// into a 'backend_pool_settings' block
-			"enforce_backend_pools_certificate_name_check": {
-				Type:     pluginsdk.TypeBool,
-				Required: true,
-			},
-
-			"backend_pools_send_receive_timeout_seconds": {
-				Type:         pluginsdk.TypeInt,
-				Optional:     true,
-				Default:      60,
-				ValidateFunc: validation.IntBetween(0, 240),
-			},
-
-			// TODO: Remove in 3.0
-			"location": {
-				Type:       pluginsdk.TypeString,
-				Optional:   true,
-				Computed:   true,
-				Deprecated: "Due to the service's API changing 'location' must now always be set to 'Global' for new resources, however if the Front Door service was created prior 2020/03/10 it may continue to exist in a specific current location",
-			},
-
-			"resource_group_name": azure.SchemaResourceGroupName(),
-
-			"routing_rule": {
-				Type:     pluginsdk.TypeList,
-				MaxItems: 500,
-				Required: true,
-				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"id": {
-							Type:     pluginsdk.TypeString,
-							Computed: true,
-						},
-						"name": {
-							Type:         pluginsdk.TypeString,
-							Required:     true,
-							ValidateFunc: azValidate.BackendPoolRoutingRuleName,
-						},
-						"enabled": {
-							Type:     pluginsdk.TypeBool,
-							Optional: true,
-							Default:  true,
-						},
-						"accepted_protocols": {
-							Type:     pluginsdk.TypeList,
-							Required: true,
-							MaxItems: 2,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-								ValidateFunc: validation.StringInSlice([]string{
-									string(frontdoors.FrontDoorProtocolHttp),
-									string(frontdoors.FrontDoorProtocolHttps),
-								}, false),
-							},
-						},
-						"patterns_to_match": {
-							Type:     pluginsdk.TypeList,
-							Required: true,
-							MaxItems: 25,
-							Elem: &pluginsdk.Schema{
-								Type:         pluginsdk.TypeString,
-								ValidateFunc: validation.StringIsNotEmpty,
-							},
-						},
-						"frontend_endpoints": {
-							Type:     pluginsdk.TypeList,
-							Required: true,
-							MaxItems: 500,
-							Elem: &pluginsdk.Schema{
-								Type:         pluginsdk.TypeString,
-								ValidateFunc: validation.StringIsNotEmpty,
-							},
-						},
-						"redirect_configuration": {
-							Type:     pluginsdk.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &pluginsdk.Resource{
-								Schema: map[string]*pluginsdk.Schema{
-									"custom_fragment": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-									},
-									"custom_host": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-									},
-									"custom_path": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-									},
-									"custom_query_string": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-									},
-									"redirect_protocol": {
-										Type:     pluginsdk.TypeString,
-										Required: true,
-										ValidateFunc: validation.StringInSlice([]string{
-											string(frontdoors.FrontDoorRedirectProtocolHttpOnly),
-											string(frontdoors.FrontDoorRedirectProtocolHttpsOnly),
-											string(frontdoors.FrontDoorRedirectProtocolMatchRequest),
-										}, false),
-									},
-									"redirect_type": {
-										Type:     pluginsdk.TypeString,
-										Required: true,
-										ValidateFunc: validation.StringInSlice([]string{
-											string(frontdoors.FrontDoorRedirectTypeFound),
-											string(frontdoors.FrontDoorRedirectTypeMoved),
-											string(frontdoors.FrontDoorRedirectTypePermanentRedirect),
-											string(frontdoors.FrontDoorRedirectTypeTemporaryRedirect),
-										}, false),
-									},
-								},
-							},
-						},
-						"forwarding_configuration": {
-							Type:     pluginsdk.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &pluginsdk.Resource{
-								Schema: map[string]*pluginsdk.Schema{
-									"backend_pool_name": {
-										Type:         pluginsdk.TypeString,
-										Required:     true,
-										ValidateFunc: azValidate.BackendPoolRoutingRuleName,
-									},
-									"cache_enabled": {
-										Type:     pluginsdk.TypeBool,
-										Optional: true,
-										Default:  false,
-									},
-									"cache_use_dynamic_compression": {
-										Type:     pluginsdk.TypeBool,
-										Optional: true,
-										Default:  false,
-									},
-									"cache_query_parameter_strip_directive": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-										Default:  string(frontdoors.FrontDoorQueryStripAll),
-										ValidateFunc: validation.StringInSlice([]string{
-											string(frontdoors.FrontDoorQueryStripAll),
-											string(frontdoors.FrontDoorQueryStripNone),
-											string(frontdoors.FrontDoorQueryStripOnly),
-											string(frontdoors.FrontDoorQueryStripAllExcept),
-										}, false),
-									},
-									"cache_query_parameters": {
-										Type:     pluginsdk.TypeList,
-										Optional: true,
-										MaxItems: 25,
-										Elem: &pluginsdk.Schema{
-											Type:         pluginsdk.TypeString,
-											ValidateFunc: validation.StringIsNotEmpty,
-										},
-									},
-									"cache_duration": {
-										Type:         pluginsdk.TypeString,
-										Optional:     true,
-										ValidateFunc: validate.ISO8601DurationBetween("PT1S", "P365D"),
-									},
-									"custom_forwarding_path": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-									},
-									"forwarding_protocol": {
-										Type:     pluginsdk.TypeString,
-										Optional: true,
-										Default:  string(frontdoors.FrontDoorForwardingProtocolHttpsOnly),
-										ValidateFunc: validation.StringInSlice([]string{
-											string(frontdoors.FrontDoorForwardingProtocolHttpOnly),
-											string(frontdoors.FrontDoorForwardingProtocolHttpsOnly),
-											string(frontdoors.FrontDoorForwardingProtocolMatchRequest),
-										}, false),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-
-			"backend_pool_load_balancing": {
-				Type:     pluginsdk.TypeList,
-				MaxItems: 5000,
-				Required: true,
-				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"id": {
-							Type:     pluginsdk.TypeString,
-							Computed: true,
-						},
-						"name": {
-							Type:         pluginsdk.TypeString,
-							Required:     true,
-							ValidateFunc: azValidate.BackendPoolRoutingRuleName,
-						},
-						"sample_size": {
-							Type:     pluginsdk.TypeInt,
-							Optional: true,
-							Default:  4,
-						},
-						"successful_samples_required": {
-							Type:     pluginsdk.TypeInt,
-							Optional: true,
-							Default:  2,
-						},
-						"additional_latency_milliseconds": {
-							Type:     pluginsdk.TypeInt,
-							Optional: true,
-							Default:  0,
-						},
-					},
-				},
-			},
-
-			"backend_pool_health_probe": {
-				Type:     pluginsdk.TypeList,
-				MaxItems: 5000,
-				Required: true,
-				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"id": {
-							Type:     pluginsdk.TypeString,
-							Computed: true,
-						},
-						"name": {
-							Type:         pluginsdk.TypeString,
-							Required:     true,
-							ValidateFunc: azValidate.BackendPoolRoutingRuleName,
-						},
-						"enabled": {
-							Type:     pluginsdk.TypeBool,
-							Optional: true,
-							Default:  true,
-						},
-						"path": {
-							Type:     pluginsdk.TypeString,
-							Optional: true,
-							Default:  "/",
-						},
-						"protocol": {
-							Type:     pluginsdk.TypeString,
-							Optional: true,
-							Default:  string(frontdoors.FrontDoorProtocolHttp),
-							ValidateFunc: validation.StringInSlice([]string{
-								string(frontdoors.FrontDoorProtocolHttp),
-								string(frontdoors.FrontDoorProtocolHttps),
-							}, false),
-						},
-						"probe_method": {
-							Type:     pluginsdk.TypeString,
-							Optional: true,
-							Default:  string(frontdoors.FrontDoorHealthProbeMethodGET),
-							ValidateFunc: validation.StringInSlice([]string{
-								string(frontdoors.FrontDoorHealthProbeMethodGET),
-								string(frontdoors.FrontDoorHealthProbeMethodHEAD),
-							}, false),
-						},
-						"interval_in_seconds": {
-							Type:     pluginsdk.TypeInt,
-							Optional: true,
-							Default:  120,
-						},
-					},
-				},
-			},
-
-			"backend_pool": {
-				Type:     pluginsdk.TypeList,
-				Required: true,
-				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"backend": {
-							Type:     pluginsdk.TypeList,
-							MaxItems: 500,
-							Required: true,
-							Elem: &pluginsdk.Resource{
-								Schema: map[string]*pluginsdk.Schema{
-									"enabled": {
-										Type:     pluginsdk.TypeBool,
-										Optional: true,
-										Default:  true,
-									},
-									"address": {
-										Type:     pluginsdk.TypeString,
-										Required: true,
-									},
-									"http_port": {
-										Type:         pluginsdk.TypeInt,
-										Required:     true,
-										ValidateFunc: validation.IntBetween(1, 65535),
-									},
-									"https_port": {
-										Type:         pluginsdk.TypeInt,
-										Required:     true,
-										ValidateFunc: validation.IntBetween(1, 65535),
-									},
-									"weight": {
-										Type:         pluginsdk.TypeInt,
-										Optional:     true,
-										Default:      50,
-										ValidateFunc: validation.IntBetween(1, 1000),
-									},
-									"priority": {
-										Type:         pluginsdk.TypeInt,
-										Optional:     true,
-										Default:      1,
-										ValidateFunc: validation.IntBetween(1, 5),
-									},
-									"host_header": {
-										Type:     pluginsdk.TypeString,
-										Required: true,
-									},
-								},
-							},
-						},
-						"id": {
-							Type:     pluginsdk.TypeString,
-							Computed: true,
-						},
-						"name": {
-							Type:         pluginsdk.TypeString,
-							Required:     true,
-							ValidateFunc: azValidate.BackendPoolRoutingRuleName,
-						},
-						"health_probe_name": {
-							Type:     pluginsdk.TypeString,
-							Required: true,
-						},
-						"load_balancing_name": {
-							Type:     pluginsdk.TypeString,
-							Required: true,
-						},
-					},
-				},
-			},
-
-			"frontend_endpoint": {
-				Type:     pluginsdk.TypeList,
-				MaxItems: 500,
-				Required: true,
-				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"id": {
-							Type:     pluginsdk.TypeString,
-							Computed: true,
-						},
-						"name": {
-							Type:         pluginsdk.TypeString,
-							Required:     true,
-							ValidateFunc: azValidate.BackendPoolRoutingRuleName,
-						},
-						"host_name": {
-							Type:     pluginsdk.TypeString,
-							Required: true,
-						},
-						"session_affinity_enabled": {
-							Type:     pluginsdk.TypeBool,
-							Optional: true,
-							Default:  false,
-						},
-						"session_affinity_ttl_seconds": {
-							Type:     pluginsdk.TypeInt,
-							Optional: true,
-							Default:  0,
-						},
-						"web_application_firewall_policy_link_id": {
-							Type:         pluginsdk.TypeString,
-							Optional:     true,
-							ValidateFunc: azure.ValidateResourceID,
-						},
-					},
-				},
-			},
-
-			// Computed values
-			"explicit_resource_order": {
-				Type:     pluginsdk.TypeList,
-				Computed: true,
-				Elem: &pluginsdk.Resource{
-					Schema: map[string]*pluginsdk.Schema{
-						"backend_pool_ids": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-							},
-						},
-						"frontend_endpoint_ids": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-							},
-						},
-						"routing_rule_ids": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-							},
-						},
-						"backend_pool_load_balancing_ids": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-							},
-						},
-						"backend_pool_health_probe_ids": {
-							Type:     pluginsdk.TypeList,
-							Computed: true,
-							Elem: &pluginsdk.Schema{
-								Type: pluginsdk.TypeString,
-							},
-						},
-					},
-				},
-			},
-
-			"backend_pool_health_probes": {
-				Type:     pluginsdk.TypeMap,
-				Computed: true,
-				Elem: &pluginsdk.Schema{
-					Type: pluginsdk.TypeString,
-				},
-			},
-
-			"backend_pool_load_balancing_settings": {
-				Type:     pluginsdk.TypeMap,
-				Computed: true,
-				Elem: &pluginsdk.Schema{
-					Type: pluginsdk.TypeString,
-				},
-			},
-
-			"backend_pools": {
-				Type:     pluginsdk.TypeMap,
-				Computed: true,
-				Elem: &pluginsdk.Schema{
-					Type: pluginsdk.TypeString,
-				},
-			},
-
-			"frontend_endpoints": {
-				Type:     pluginsdk.TypeMap,
-				Computed: true,
-				Elem: &pluginsdk.Schema{
-					Type: pluginsdk.TypeString,
-				},
-			},
-
-			"routing_rules": {
-				Type:     pluginsdk.TypeMap,
-				Computed: true,
-				Elem: &pluginsdk.Schema{
-					Type: pluginsdk.TypeString,
-				},
-			},
-
-			"tags": tags.Schema(),
-		},
+		Schema: resourceFrontDoorSchema(),
 
 		CustomizeDiff: pluginsdk.CustomizeDiffShim(frontDoorCustomizeDiff),
 	}
@@ -569,28 +75,15 @@ func resourceFrontDoorCreate(d *pluginsdk.ResourceData, meta interface{}) error 
 		return tf.ImportAsExistsError("azurerm_frontdoor", id.ID())
 	}
 
-	// remove in 3.0
-	// due to a change in the RP, if a Frontdoor exists in a location other than 'Global' it may continue to
-	// exist in that location, if this is a brand new Frontdoor it must be created in the 'Global' location
-	location := "Global"
-	preExists := false
-	cfgLocation, hasLocation := d.GetOk("location")
-
-	exists, err := client.Get(ctx, id)
-	if err != nil {
-		if !response.WasNotFound(exists.HttpResponse) {
-			return fmt.Errorf("locating %s: %+v", id, err)
+	var backendCertNameCheck bool
+	var backendPoolsSendReceiveTimeoutSeconds int64
+	if bps, ok := d.Get("backend_pool_settings").([]interface{}); ok && len(bps) > 0 {
+		bpsMap := bps[0].(map[string]interface{})
+		if v, ok := bpsMap["enforce_backend_pools_certificate_name_check"].(bool); ok {
+			backendCertNameCheck = v
 		}
-	} else {
-		preExists = true
-		if exists.Model != nil {
-			location = azure.NormalizeLocation(*exists.Model.Location)
-		}
-	}
-
-	if hasLocation && preExists {
-		if location != azure.NormalizeLocation(cfgLocation) {
-			return fmt.Errorf("the Front Door %q (Resource Group %q) already exists in %q and cannot be moved to the %q location", name, resourceGroup, location, cfgLocation)
+		if v, ok := bpsMap["backend_pools_send_receive_timeout_seconds"].(int); ok {
+			backendPoolsSendReceiveTimeoutSeconds = int64(v)
 		}
 	}
 
@@ -600,24 +93,23 @@ func resourceFrontDoorCreate(d *pluginsdk.ResourceData, meta interface{}) error 
 	healthProbeSettings := d.Get("backend_pool_health_probe").([]interface{})
 	backendPools := d.Get("backend_pool").([]interface{})
 	frontendEndpoints := d.Get("frontend_endpoint").([]interface{})
-	backendPoolsSettings := d.Get("enforce_backend_pools_certificate_name_check").(bool)
-	backendPoolsSendReceiveTimeoutSeconds := int64(d.Get("backend_pools_send_receive_timeout_seconds").(int))
+
 	enabledState := expandFrontDoorEnabledState(d.Get("load_balancer_enabled").(bool))
 	t := d.Get("tags").(map[string]interface{})
 
 	frontDoorParameters := frontdoors.FrontDoor{
-		Location: utils.String(location),
+		Location: utils.String("Global"),
 		Properties: &frontdoors.FrontDoorProperties{
 			FriendlyName:          utils.String(friendlyName),
 			RoutingRules:          expandFrontDoorRoutingRule(routingRules, id, nil),
 			BackendPools:          expandFrontDoorBackendPools(backendPools, id),
-			BackendPoolsSettings:  expandFrontDoorBackendPoolsSettings(backendPoolsSettings, backendPoolsSendReceiveTimeoutSeconds),
+			BackendPoolsSettings:  expandFrontDoorBackendPoolsSettings(backendCertNameCheck, backendPoolsSendReceiveTimeoutSeconds),
 			FrontendEndpoints:     expandFrontDoorFrontendEndpoint(frontendEndpoints, id),
 			HealthProbeSettings:   expandFrontDoorHealthProbeSettingsModel(healthProbeSettings, id),
 			LoadBalancingSettings: expandFrontDoorLoadBalancingSettingsModel(loadBalancingSettings, id),
 			EnabledState:          &enabledState,
 		},
-		Tags: expandTags(t),
+		Tags: tags.Expand(t),
 	}
 
 	if err := client.CreateOrUpdateThenPoll(ctx, id, frontDoorParameters); err != nil {
@@ -700,8 +192,19 @@ func resourceFrontDoorUpdate(d *pluginsdk.ResourceData, meta interface{}) error 
 		existingModel.Properties.FrontendEndpoints = expandFrontDoorFrontendEndpoint(frontendEndpoints, id)
 	}
 
-	if d.HasChanges("enforce_backend_pools_certificate_name_check", "backend_pools_send_receive_timeout_seconds") {
-		existingModel.Properties.BackendPoolsSettings = expandFrontDoorBackendPoolsSettings(d.Get("enforce_backend_pools_certificate_name_check").(bool), int64(d.Get("backend_pools_send_receive_timeout_seconds").(int)))
+	if d.HasChange("backend_pool_settings") {
+		var backendCertNameCheck bool
+		var backendPoolsSendReceiveTimeoutSeconds int64
+		if bps, ok := d.Get("backend_pool_settings").([]interface{}); ok && len(bps) > 0 {
+			bpsMap := bps[0].(map[string]interface{})
+			if v, ok := bpsMap["enforce_backend_pools_certificate_name_check"].(bool); ok {
+				backendCertNameCheck = v
+			}
+			if v, ok := bpsMap["backend_pools_send_receive_timeout_seconds"].(int); ok {
+				backendPoolsSendReceiveTimeoutSeconds = int64(v)
+			}
+			existingModel.Properties.BackendPoolsSettings = expandFrontDoorBackendPoolsSettings(backendCertNameCheck, backendPoolsSendReceiveTimeoutSeconds)
+		}
 	}
 
 	if d.HasChange("load_balancer_enabled") {
@@ -710,7 +213,7 @@ func resourceFrontDoorUpdate(d *pluginsdk.ResourceData, meta interface{}) error 
 	}
 
 	if d.HasChanges("tags") {
-		existingModel.Tags = expandTags(d.Get("tags").(map[string]interface{}))
+		existingModel.Tags = tags.Expand(d.Get("tags").(map[string]interface{}))
 	}
 
 	// If the explicitResourceOrder is empty and it's not a new resource set the mapping table to the state file and return an error.
@@ -751,14 +254,10 @@ func resourceFrontDoorRead(d *pluginsdk.ResourceData, meta interface{}) error {
 		return fmt.Errorf("reading %s: %+v", *id, err)
 	}
 
-	d.Set("name", id.Name)
-	d.Set("resource_group_name", id.ResourceGroup)
+	d.Set("name", id.FrontDoorName)
+	d.Set("resource_group_name", id.ResourceGroupName)
 
 	if model := resp.Model; model != nil {
-		if model.Location != nil {
-			d.Set("location", azure.NormalizeLocation(*model.Location))
-		}
-
 		if props := model.Properties; props != nil {
 			explicitResourceOrder := d.Get("explicit_resource_order").([]interface{})
 			flattenedBackendPools, err := flattenFrontDoorBackendPools(props.BackendPools, *id, explicitResourceOrder)
@@ -770,9 +269,12 @@ func resourceFrontDoorRead(d *pluginsdk.ResourceData, meta interface{}) error {
 			}
 
 			backendPoolSettings := flattenFrontDoorBackendPoolsSettings(props.BackendPoolsSettings)
+			out := map[string]interface{}{
+				"enforce_backend_pools_certificate_name_check": backendPoolSettings.enforceBackendPoolsCertificateNameCheck,
+				"backend_pools_send_receive_timeout_seconds":   backendPoolSettings.backendPoolsSendReceiveTimeoutSeconds,
+			}
+			d.Set("backend_pool_settings", []interface{}{out})
 
-			d.Set("enforce_backend_pools_certificate_name_check", backendPoolSettings.enforceBackendPoolsCertificateNameCheck)
-			d.Set("backend_pools_send_receive_timeout_seconds", backendPoolSettings.backendPoolsSendReceiveTimeoutSeconds)
 			d.Set("cname", props.Cname)
 			d.Set("header_frontdoor_id", props.FrontdoorId)
 			if props.EnabledState != nil {
@@ -904,7 +406,7 @@ func resourceFrontDoorRead(d *pluginsdk.ResourceData, meta interface{}) error {
 			}
 		}
 
-		return tags.FlattenAndSet(d, flattenTags(model.Tags))
+		return tags.FlattenAndSet(d, model.Tags)
 	}
 
 	return nil
@@ -941,9 +443,9 @@ func expandFrontDoorBackendPools(input []interface{}, frontDoorId frontdoors.Fro
 		backendPoolHealthProbeName := backendPool["health_probe_name"].(string)
 		backends := backendPool["backend"].([]interface{})
 
-		backendPoolId := parse.NewBackendPoolID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, backendPoolName).ID()
-		healthProbeId := parse.NewHealthProbeID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, backendPoolHealthProbeName).ID()
-		loadBalancingId := parse.NewLoadBalancingID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, backendPoolLoadBalancingName).ID()
+		backendPoolId := parse.NewBackendPoolID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, backendPoolName).ID()
+		healthProbeId := parse.NewHealthProbeID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, backendPoolHealthProbeName).ID()
+		loadBalancingId := parse.NewLoadBalancingID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, backendPoolLoadBalancingName).ID()
 
 		result := frontdoors.BackendPool{
 			Id:   utils.String(backendPoolId),
@@ -1032,7 +534,7 @@ func expandFrontDoorFrontendEndpoint(input []interface{}, frontDoorId frontdoors
 		sessionAffinityTtlSeconds := int64(frontendEndpoint["session_affinity_ttl_seconds"].(int))
 		waf := frontendEndpoint["web_application_firewall_policy_link_id"].(string)
 		name := frontendEndpoint["name"].(string)
-		id := frontdoors.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		id := frontdoors.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 		sessionAffinityEnabled := frontdoors.SessionAffinityEnabledStateDisabled
 
 		if isSessionAffinityEnabled {
@@ -1079,7 +581,7 @@ func expandFrontDoorHealthProbeSettingsModel(input []interface{}, frontDoorId fr
 		if !enabled {
 			healthProbeEnabled = frontdoors.HealthProbeEnabledDisabled
 		}
-		healthProbeId := parse.NewHealthProbeID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		healthProbeId := parse.NewHealthProbeID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 
 		probeMethod := frontdoors.FrontDoorHealthProbeMethod(v["probe_method"].(string))
 
@@ -1114,7 +616,7 @@ func expandFrontDoorLoadBalancingSettingsModel(input []interface{}, frontDoorId 
 		sampleSize := int64(loadBalanceSetting["sample_size"].(int))
 		successfulSamplesRequired := int64(loadBalanceSetting["successful_samples_required"].(int))
 		additionalLatencyMilliseconds := int64(loadBalanceSetting["additional_latency_milliseconds"].(int))
-		loadBalancingId := parse.NewLoadBalancingID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		loadBalancingId := parse.NewLoadBalancingID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 
 		result := frontdoors.LoadBalancingSettingsModel{
 			Id:   utils.String(loadBalancingId),
@@ -1157,7 +659,7 @@ func expandFrontDoorRoutingRule(input []interface{}, frontDoorId frontdoors.Fron
 		} else if fc := routingRule["forwarding_configuration"].([]interface{}); len(fc) != 0 {
 			routingConfiguration = expandFrontDoorForwardingConfiguration(fc, frontDoorId)
 		}
-		routingRuleId := parse.NewRoutingRuleID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		routingRuleId := parse.NewRoutingRuleID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 
 		currentRoutingRule := frontdoors.RoutingRule{
 			Id:   utils.String(routingRuleId),
@@ -1211,7 +713,7 @@ func expandFrontDoorFrontEndEndpoints(input []interface{}, frontDoorId frontdoor
 	output := make([]frontdoors.SubResource, 0)
 
 	for _, name := range input {
-		frontendEndpointId := parse.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name.(string)).ID()
+		frontendEndpointId := parse.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name.(string)).ID()
 		result := frontdoors.SubResource{
 			Id: utils.String(frontendEndpointId),
 		}
@@ -1285,7 +787,7 @@ func expandFrontDoorForwardingConfiguration(input []interface{}, frontDoorId fro
 	}
 	queryParametersString := strings.Join(queryParametersArray, ",")
 
-	backendPoolId := parse.NewBackendPoolID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, backendPoolName).ID()
+	backendPoolId := parse.NewBackendPoolID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, backendPoolName).ID()
 	backend := &frontdoors.SubResource{
 		Id: utils.String(backendPoolId),
 	}
@@ -1483,7 +985,7 @@ func flattenSingleFrontDoorBackendPools(input *frontdoors.BackendPool, frontDoor
 	if input.Name != nil {
 		name = *input.Name
 		// rewrite the ID to ensure it's consistent
-		id = parse.NewBackendPoolID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		id = parse.NewBackendPoolID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 	}
 
 	backend := make([]interface{}, 0)
@@ -1593,10 +1095,10 @@ func retrieveFrontEndEndpointInformation(ctx context.Context, client *frontdoors
 		}
 
 		name := *endpoint.Name
-		endpointID := frontdoors.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name)
+		endpointID := frontdoors.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name)
 		resp, err := client.FrontendEndpointsGet(ctx, endpointID)
 		if err != nil {
-			return nil, fmt.Errorf("retrieving Custom HTTPS Configuration for Frontend Endpoint %q (FrontDoor %q / Resource Group %q): %+v", name, frontDoorId.Name, frontDoorId.ResourceGroup, err)
+			return nil, fmt.Errorf("retrieving Custom HTTPS Configuration for Frontend Endpoint %q (FrontDoor %q / Resource Group %q): %+v", name, frontDoorId.FrontDoorName, frontDoorId.ResourceGroupName, err)
 		}
 		if resp.Model != nil {
 			output = append(output, *resp.Model)
@@ -1682,13 +1184,9 @@ func flattenSingleFrontEndEndpoints(input frontdoors.FrontendEndpoint, frontDoor
 	name := ""
 	if input.Name != nil {
 		// rewrite the ID to ensure it's consistent
-		id = parse.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, *input.Name).ID()
+		id = parse.NewFrontendEndpointID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, *input.Name).ID()
 		name = *input.Name
 	}
-	// TODO: I may have to include the customHTTPSConfiguration as returned from the frontendEndpoint due to an issue in
-	// portal. Still investigating this.
-	// customHTTPSConfiguration := make([]interface{}, 0)
-	// customHttpsProvisioningEnabled := false
 	hostName := ""
 	sessionAffinityEnabled := false
 	sessionAffinityTlsSeconds := 0
@@ -1794,7 +1292,7 @@ func flattenSingleFrontDoorHealthProbeSettingsModel(input *frontdoors.HealthProb
 	if input.Name != nil {
 		name = *input.Name
 		// rewrite the ID to ensure it's consistent
-		id = parse.NewHealthProbeID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		id = parse.NewHealthProbeID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 	}
 
 	enabled := false
@@ -1901,7 +1399,7 @@ func flattenSingleFrontDoorLoadBalancingSettingsModel(input *frontdoors.LoadBala
 	if input.Name != nil {
 		name = *input.Name
 		// rewrite the ID to ensure it's consistent
-		id = parse.NewLoadBalancingID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, name).ID()
+		id = parse.NewLoadBalancingID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, name).ID()
 	}
 
 	additionalLatencyMilliseconds := 0
@@ -2006,7 +1504,7 @@ func flattenSingleFrontDoorRoutingRule(input frontdoors.RoutingRule, oldBlocks i
 	name := ""
 	if input.Name != nil {
 		// rewrite the ID to ensure it's consistent
-		id = parse.NewRoutingRuleID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroup, frontDoorId.Name, *input.Name).ID()
+		id = parse.NewRoutingRuleID(frontDoorId.SubscriptionId, frontDoorId.ResourceGroupName, frontDoorId.FrontDoorName, *input.Name).ID()
 		name = *input.Name
 	}
 
@@ -2021,7 +1519,6 @@ func flattenSingleFrontDoorRoutingRule(input frontdoors.RoutingRule, oldBlocks i
 		acceptedProtocols = flattenFrontDoorAcceptedProtocol(props.AcceptedProtocols)
 		if props.EnabledState != nil {
 			enabled = *props.EnabledState == frontdoors.RoutingRuleEnabledStateEnabled
-
 		}
 		forwardConfiguration, err := flattenRoutingRuleForwardingConfiguration(props.RouteConfiguration, oldBlocks)
 		if err != nil {
@@ -2220,4 +1717,500 @@ func flattenFrontDoorFrontendEndpointsSubResources(input *[]frontdoors.SubResour
 	}
 
 	return &output, nil
+}
+
+func resourceFrontDoorSchema() map[string]*pluginsdk.Schema {
+	return map[string]*pluginsdk.Schema{
+		"name": {
+			Type:         pluginsdk.TypeString,
+			Required:     true,
+			ForceNew:     true,
+			ValidateFunc: azValidate.FrontDoorName,
+		},
+
+		"cname": {
+			Type:     pluginsdk.TypeString,
+			Computed: true,
+		},
+
+		"header_frontdoor_id": {
+			Type:     pluginsdk.TypeString,
+			Computed: true,
+		},
+
+		"friendly_name": {
+			Type:     pluginsdk.TypeString,
+			Optional: true,
+		},
+
+		"load_balancer_enabled": {
+			Type:     pluginsdk.TypeBool,
+			Optional: true,
+			Default:  true,
+		},
+
+		"resource_group_name": commonschema.ResourceGroupName(),
+
+		"routing_rule": {
+			Type:     pluginsdk.TypeList,
+			MaxItems: 500,
+			Required: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"id": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"name": {
+						Type:         pluginsdk.TypeString,
+						Required:     true,
+						ValidateFunc: azValidate.BackendPoolRoutingRuleName,
+					},
+					"enabled": {
+						Type:     pluginsdk.TypeBool,
+						Optional: true,
+						Default:  true,
+					},
+					"accepted_protocols": {
+						Type:     pluginsdk.TypeList,
+						Required: true,
+						MaxItems: 2,
+						Elem: &pluginsdk.Schema{
+							Type: pluginsdk.TypeString,
+							ValidateFunc: validation.StringInSlice([]string{
+								string(frontdoors.FrontDoorProtocolHttp),
+								string(frontdoors.FrontDoorProtocolHttps),
+							}, false),
+						},
+					},
+					"patterns_to_match": {
+						Type:     pluginsdk.TypeList,
+						Required: true,
+						MaxItems: 25,
+						Elem: &pluginsdk.Schema{
+							Type:         pluginsdk.TypeString,
+							ValidateFunc: validation.StringIsNotEmpty,
+						},
+					},
+					"frontend_endpoints": {
+						Type:     pluginsdk.TypeList,
+						Required: true,
+						MaxItems: 500,
+						Elem: &pluginsdk.Schema{
+							Type:         pluginsdk.TypeString,
+							ValidateFunc: validation.StringIsNotEmpty,
+						},
+					},
+					"redirect_configuration": {
+						Type:     pluginsdk.TypeList,
+						Optional: true,
+						MaxItems: 1,
+						Elem: &pluginsdk.Resource{
+							Schema: map[string]*pluginsdk.Schema{
+								"custom_fragment": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+								},
+								"custom_host": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+								},
+								"custom_path": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+								},
+								"custom_query_string": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+								},
+								"redirect_protocol": {
+									Type:     pluginsdk.TypeString,
+									Required: true,
+									ValidateFunc: validation.StringInSlice([]string{
+										string(frontdoors.FrontDoorRedirectProtocolHttpOnly),
+										string(frontdoors.FrontDoorRedirectProtocolHttpsOnly),
+										string(frontdoors.FrontDoorRedirectProtocolMatchRequest),
+									}, false),
+								},
+								"redirect_type": {
+									Type:     pluginsdk.TypeString,
+									Required: true,
+									ValidateFunc: validation.StringInSlice([]string{
+										string(frontdoors.FrontDoorRedirectTypeFound),
+										string(frontdoors.FrontDoorRedirectTypeMoved),
+										string(frontdoors.FrontDoorRedirectTypePermanentRedirect),
+										string(frontdoors.FrontDoorRedirectTypeTemporaryRedirect),
+									}, false),
+								},
+							},
+						},
+					},
+					"forwarding_configuration": {
+						Type:     pluginsdk.TypeList,
+						Optional: true,
+						MaxItems: 1,
+						Elem: &pluginsdk.Resource{
+							Schema: map[string]*pluginsdk.Schema{
+								"backend_pool_name": {
+									Type:         pluginsdk.TypeString,
+									Required:     true,
+									ValidateFunc: azValidate.BackendPoolRoutingRuleName,
+								},
+								"cache_enabled": {
+									Type:     pluginsdk.TypeBool,
+									Optional: true,
+									Default:  false,
+								},
+								"cache_use_dynamic_compression": {
+									Type:     pluginsdk.TypeBool,
+									Optional: true,
+									Default:  false,
+								},
+								"cache_query_parameter_strip_directive": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+									Default:  string(frontdoors.FrontDoorQueryStripAll),
+									ValidateFunc: validation.StringInSlice([]string{
+										string(frontdoors.FrontDoorQueryStripAll),
+										string(frontdoors.FrontDoorQueryStripNone),
+										string(frontdoors.FrontDoorQueryStripOnly),
+										string(frontdoors.FrontDoorQueryStripAllExcept),
+									}, false),
+								},
+								"cache_query_parameters": {
+									Type:     pluginsdk.TypeList,
+									Optional: true,
+									MaxItems: 25,
+									Elem: &pluginsdk.Schema{
+										Type:         pluginsdk.TypeString,
+										ValidateFunc: validation.StringIsNotEmpty,
+									},
+								},
+								"cache_duration": {
+									Type:         pluginsdk.TypeString,
+									Optional:     true,
+									ValidateFunc: validate.ISO8601DurationBetween("PT1S", "P365D"),
+								},
+								"custom_forwarding_path": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+								},
+								"forwarding_protocol": {
+									Type:     pluginsdk.TypeString,
+									Optional: true,
+									Default:  string(frontdoors.FrontDoorForwardingProtocolHttpsOnly),
+									ValidateFunc: validation.StringInSlice([]string{
+										string(frontdoors.FrontDoorForwardingProtocolHttpOnly),
+										string(frontdoors.FrontDoorForwardingProtocolHttpsOnly),
+										string(frontdoors.FrontDoorForwardingProtocolMatchRequest),
+									}, false),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
+		"backend_pool_load_balancing": {
+			Type:     pluginsdk.TypeList,
+			MaxItems: 5000,
+			Required: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"id": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"name": {
+						Type:         pluginsdk.TypeString,
+						Required:     true,
+						ValidateFunc: azValidate.BackendPoolRoutingRuleName,
+					},
+					"sample_size": {
+						Type:     pluginsdk.TypeInt,
+						Optional: true,
+						Default:  4,
+					},
+					"successful_samples_required": {
+						Type:     pluginsdk.TypeInt,
+						Optional: true,
+						Default:  2,
+					},
+					"additional_latency_milliseconds": {
+						Type:     pluginsdk.TypeInt,
+						Optional: true,
+						Default:  0,
+					},
+				},
+			},
+		},
+
+		"backend_pool_health_probe": {
+			Type:     pluginsdk.TypeList,
+			MaxItems: 5000,
+			Required: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"id": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"name": {
+						Type:         pluginsdk.TypeString,
+						Required:     true,
+						ValidateFunc: azValidate.BackendPoolRoutingRuleName,
+					},
+					"enabled": {
+						Type:     pluginsdk.TypeBool,
+						Optional: true,
+						Default:  true,
+					},
+					"path": {
+						Type:     pluginsdk.TypeString,
+						Optional: true,
+						Default:  "/",
+					},
+					"protocol": {
+						Type:     pluginsdk.TypeString,
+						Optional: true,
+						Default:  string(frontdoors.FrontDoorProtocolHttp),
+						ValidateFunc: validation.StringInSlice([]string{
+							string(frontdoors.FrontDoorProtocolHttp),
+							string(frontdoors.FrontDoorProtocolHttps),
+						}, false),
+					},
+					"probe_method": {
+						Type:     pluginsdk.TypeString,
+						Optional: true,
+						Default:  string(frontdoors.FrontDoorHealthProbeMethodGET),
+						ValidateFunc: validation.StringInSlice([]string{
+							string(frontdoors.FrontDoorHealthProbeMethodGET),
+							string(frontdoors.FrontDoorHealthProbeMethodHEAD),
+						}, false),
+					},
+					"interval_in_seconds": {
+						Type:     pluginsdk.TypeInt,
+						Optional: true,
+						Default:  120,
+					},
+				},
+			},
+		},
+
+		"backend_pool": {
+			Type:     pluginsdk.TypeList,
+			Required: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"backend": {
+						Type:     pluginsdk.TypeList,
+						MaxItems: 500,
+						Required: true,
+						Elem: &pluginsdk.Resource{
+							Schema: map[string]*pluginsdk.Schema{
+								"enabled": {
+									Type:     pluginsdk.TypeBool,
+									Optional: true,
+									Default:  true,
+								},
+								"address": {
+									Type:     pluginsdk.TypeString,
+									Required: true,
+								},
+								"http_port": {
+									Type:         pluginsdk.TypeInt,
+									Required:     true,
+									ValidateFunc: validation.IntBetween(1, 65535),
+								},
+								"https_port": {
+									Type:         pluginsdk.TypeInt,
+									Required:     true,
+									ValidateFunc: validation.IntBetween(1, 65535),
+								},
+								"weight": {
+									Type:         pluginsdk.TypeInt,
+									Optional:     true,
+									Default:      50,
+									ValidateFunc: validation.IntBetween(1, 1000),
+								},
+								"priority": {
+									Type:         pluginsdk.TypeInt,
+									Optional:     true,
+									Default:      1,
+									ValidateFunc: validation.IntBetween(1, 5),
+								},
+								"host_header": {
+									Type:     pluginsdk.TypeString,
+									Required: true,
+								},
+							},
+						},
+					},
+					"id": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"name": {
+						Type:         pluginsdk.TypeString,
+						Required:     true,
+						ValidateFunc: azValidate.BackendPoolRoutingRuleName,
+					},
+					"health_probe_name": {
+						Type:     pluginsdk.TypeString,
+						Required: true,
+					},
+					"load_balancing_name": {
+						Type:     pluginsdk.TypeString,
+						Required: true,
+					},
+				},
+			},
+		},
+
+		"backend_pool_settings": {
+			Type:     pluginsdk.TypeList,
+			Optional: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"enforce_backend_pools_certificate_name_check": {
+						Type:     pluginsdk.TypeBool,
+						Required: true,
+					},
+
+					"backend_pools_send_receive_timeout_seconds": {
+						Type:         pluginsdk.TypeInt,
+						Optional:     true,
+						Default:      60,
+						ValidateFunc: validation.IntBetween(0, 240),
+					},
+				},
+			},
+		},
+
+		"frontend_endpoint": {
+			Type:     pluginsdk.TypeList,
+			MaxItems: 500,
+			Required: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"id": {
+						Type:     pluginsdk.TypeString,
+						Computed: true,
+					},
+					"name": {
+						Type:         pluginsdk.TypeString,
+						Required:     true,
+						ValidateFunc: azValidate.BackendPoolRoutingRuleName,
+					},
+					"host_name": {
+						Type:     pluginsdk.TypeString,
+						Required: true,
+					},
+					"session_affinity_enabled": {
+						Type:     pluginsdk.TypeBool,
+						Optional: true,
+						Default:  false,
+					},
+					"session_affinity_ttl_seconds": {
+						Type:     pluginsdk.TypeInt,
+						Optional: true,
+						Default:  0,
+					},
+					"web_application_firewall_policy_link_id": {
+						Type:         pluginsdk.TypeString,
+						Optional:     true,
+						ValidateFunc: azure.ValidateResourceID,
+					},
+				},
+			},
+		},
+
+		// Computed values
+		"explicit_resource_order": {
+			Type:     pluginsdk.TypeList,
+			Computed: true,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					"backend_pool_ids": {
+						Type:     pluginsdk.TypeList,
+						Computed: true,
+						Elem: &pluginsdk.Schema{
+							Type: pluginsdk.TypeString,
+						},
+					},
+					"frontend_endpoint_ids": {
+						Type:     pluginsdk.TypeList,
+						Computed: true,
+						Elem: &pluginsdk.Schema{
+							Type: pluginsdk.TypeString,
+						},
+					},
+					"routing_rule_ids": {
+						Type:     pluginsdk.TypeList,
+						Computed: true,
+						Elem: &pluginsdk.Schema{
+							Type: pluginsdk.TypeString,
+						},
+					},
+					"backend_pool_load_balancing_ids": {
+						Type:     pluginsdk.TypeList,
+						Computed: true,
+						Elem: &pluginsdk.Schema{
+							Type: pluginsdk.TypeString,
+						},
+					},
+					"backend_pool_health_probe_ids": {
+						Type:     pluginsdk.TypeList,
+						Computed: true,
+						Elem: &pluginsdk.Schema{
+							Type: pluginsdk.TypeString,
+						},
+					},
+				},
+			},
+		},
+
+		"backend_pool_health_probes": {
+			Type:     pluginsdk.TypeMap,
+			Computed: true,
+			Elem: &pluginsdk.Schema{
+				Type: pluginsdk.TypeString,
+			},
+		},
+
+		"backend_pool_load_balancing_settings": {
+			Type:     pluginsdk.TypeMap,
+			Computed: true,
+			Elem: &pluginsdk.Schema{
+				Type: pluginsdk.TypeString,
+			},
+		},
+
+		"backend_pools": {
+			Type:     pluginsdk.TypeMap,
+			Computed: true,
+			Elem: &pluginsdk.Schema{
+				Type: pluginsdk.TypeString,
+			},
+		},
+
+		"frontend_endpoints": {
+			Type:     pluginsdk.TypeMap,
+			Computed: true,
+			Elem: &pluginsdk.Schema{
+				Type: pluginsdk.TypeString,
+			},
+		},
+
+		"routing_rules": {
+			Type:     pluginsdk.TypeMap,
+			Computed: true,
+			Elem: &pluginsdk.Schema{
+				Type: pluginsdk.TypeString,
+			},
+		},
+
+		"tags": commonschema.Tags(),
+	}
 }

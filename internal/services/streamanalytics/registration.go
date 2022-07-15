@@ -7,8 +7,14 @@ import (
 
 type Registration struct{}
 
-var _ sdk.TypedServiceRegistration = Registration{}
-var _ sdk.UntypedServiceRegistration = Registration{}
+var (
+	_ sdk.TypedServiceRegistration                   = Registration{}
+	_ sdk.UntypedServiceRegistrationWithAGitHubLabel = Registration{}
+)
+
+func (r Registration) AssociatedGitHubLabel() string {
+	return "service/stream-analytics"
+}
 
 func (r Registration) DataSources() []sdk.DataSource {
 	return []sdk.DataSource{}
@@ -16,7 +22,13 @@ func (r Registration) DataSources() []sdk.DataSource {
 
 func (r Registration) Resources() []sdk.Resource {
 	return []sdk.Resource{
+		ClusterResource{},
+		JobScheduleResource{},
+		ManagedPrivateEndpointResource{},
+		OutputFunctionResource{},
 		OutputTableResource{},
+		OutputPowerBIResource{},
+		OutputCosmosDBResource{},
 	}
 }
 
@@ -35,7 +47,7 @@ func (r Registration) WebsiteCategories() []string {
 // SupportedDataSources returns the supported Data Sources supported by this Service
 func (r Registration) SupportedDataSources() map[string]*pluginsdk.Resource {
 	return map[string]*pluginsdk.Resource{
-		"azurerm_stream_analytics_job": dataSourceArmStreamAnalyticsJob(),
+		"azurerm_stream_analytics_job": dataSourceStreamAnalyticsJob(),
 	}
 }
 
@@ -43,6 +55,7 @@ func (r Registration) SupportedDataSources() map[string]*pluginsdk.Resource {
 func (r Registration) SupportedResources() map[string]*pluginsdk.Resource {
 	return map[string]*pluginsdk.Resource{
 		"azurerm_stream_analytics_job":                     resourceStreamAnalyticsJob(),
+		"azurerm_stream_analytics_function_javascript_uda": resourceStreamAnalyticsFunctionUDA(),
 		"azurerm_stream_analytics_function_javascript_udf": resourceStreamAnalyticsFunctionUDF(),
 		"azurerm_stream_analytics_output_blob":             resourceStreamAnalyticsOutputBlob(),
 		"azurerm_stream_analytics_output_mssql":            resourceStreamAnalyticsOutputSql(),

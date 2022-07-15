@@ -28,16 +28,13 @@ resource "azurerm_automation_account" "example" {
   name                = "account-example"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
-
-  sku {
-    name = "Basic"
-  }
+  sku_name            = "Basic"
 }
 
 resource "azurerm_automation_certificate" "example" {
   name                    = "certificate-example"
-  resource_group_name     = "${azurerm_resource_group.example.name}"
-  automation_account_name = "${azurerm_automation_account.example.name}"
+  resource_group_name     = azurerm_resource_group.example.name
+  automation_account_name = azurerm_automation_account.example.name
   base64                  = filebase64("certificate.pfx")
 }
 

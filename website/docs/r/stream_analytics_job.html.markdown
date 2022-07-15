@@ -22,7 +22,7 @@ resource "azurerm_stream_analytics_job" "example" {
   name                                     = "example-job"
   resource_group_name                      = azurerm_resource_group.example.name
   location                                 = azurerm_resource_group.example.location
-  compatibility_level                      = "1.1"
+  compatibility_level                      = "1.2"
   data_locale                              = "en-GB"
   events_late_arrival_max_delay_in_seconds = 60
   events_out_of_order_max_delay_in_seconds = 50
@@ -53,7 +53,9 @@ The following arguments are supported:
 
 * `location` - (Required) The Azure Region in which the Resource Group exists. Changing this forces a new resource to be created.
 
-* `compatibility_level` - (Required) Specifies the compatibility level for this job - which controls certain runtime behaviours of the streaming job. Possible values are `1.0` and `1.1`.
+* `stream_analytics_cluster_id` - (Optional) The ID of an existing Stream Analytics Cluster where the Stream Analytics Job should run.
+
+* `compatibility_level` - (Optional) Specifies the compatibility level for this job - which controls certain runtime behaviours of the streaming job. Possible values are `1.0`, `1.1` and `1.2`.
 
 -> **NOTE:** Support for Compatibility Level 1.2 is dependent on a new version of the Stream Analytics API, which [being tracked in this issue](https://github.com/Azure/azure-rest-api-specs/issues/5604).
 
@@ -65,11 +67,17 @@ The following arguments are supported:
 
 * `events_out_of_order_policy` - (Optional) Specifies the policy which should be applied to events which arrive out of order in the input event stream. Possible values are `Adjust` and `Drop`.  Default is `Adjust`.
 
+* `type` - (Optional) The type of the Stream Analytics Job. Possible values are `Cloud` and `Edge`. Defaults to `Cloud`. Changing this forces a new resource to be created.
+
+-> **NOTE:** `Edge` doesn't support `stream_analytics_cluster_id` and `streaming_units`.
+
 * `identity` - (Optional) An `identity` block as defined below.
 
 * `output_error_policy` - (Optional) Specifies the policy which should be applied to events which arrive at the output and cannot be written to the external storage due to being malformed (such as missing column values, column values of wrong type or size). Possible values are `Drop` and `Stop`.  Default is `Drop`.
 
-* `streaming_units` - (Required) Specifies the number of streaming units that the streaming job uses. Supported values are `1`, `3`, `6` and multiples of `6` up to `120`.
+* `streaming_units` - (Optional) Specifies the number of streaming units that the streaming job uses. Supported values are `1`, `3`, `6` and multiples of `6` up to `120`.
+
+-> **NOTE:** `streaming_units` must be set when `type` is `Cloud`.
 
 * `transformation_query` - (Required) Specifies the query that will be run in the streaming job, [written in Stream Analytics Query Language (SAQL)](https://msdn.microsoft.com/library/azure/dn834998).
 
@@ -79,7 +87,7 @@ The following arguments are supported:
 
 An `identity` block supports the following:
 
-* `type` - (Required) The type of identity used for the Stream Analytics Job. Possible values are `SystemAssigned`.
+* `type` - (Required) Specifies the type of Managed Service Identity that should be configured on this Stream Analytics Job. The only possible value is `SystemAssigned`.
 
 ## Attributes Reference
 
@@ -95,9 +103,9 @@ The following attributes are exported in addition to the arguments listed above:
 
 An `identity` block exports the following:
 
-* `principal_id` - The ID of the Principal (Client) in Azure Active Directory.
+* `principal_id` - The Principal ID associated with this Managed Service Identity.
 
-* `tenant_id` - The ID of the Azure Active Directory Tenant.
+* `tenant_id` - The Tenant ID associated with this Managed Service Identity.
 
 ## Timeouts
 
